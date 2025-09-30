@@ -171,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                             decoration: InputDecoration(
-                              hintText: 'Enter phone number',
+                              hintText: 'Enter phone number (with country code)',
                               hintStyle: GoogleFonts.lato(
                                 color: Colors.white.withOpacity(0.5),
                                 fontSize: 14,

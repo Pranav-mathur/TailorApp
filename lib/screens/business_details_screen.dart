@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
-import '../providers/global_provider.dart'; // import your GlobalProvider
+import '../providers/global_provider.dart';
 
 class BusinessDetailsScreen extends StatefulWidget {
   const BusinessDetailsScreen({super.key});
@@ -18,18 +18,31 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
 
   List<String> uploadedImages = [];
   bool _isSubmitting = false;
-  Map<String, String>? _selectedAddress;
+  Map<String, dynamic>? _selectedAddress;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_selectedAddress == null) {
-      setState(() {
-        _selectedAddress = {
-          'locationName': 'SNN Raj Vista',
-          'fullAddress': '312, MG road, Korama...',
-        };
-      });
+
+    final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+
+    // Auto-fill if data exists in GlobalProvider
+    if (_businessNameController.text.isEmpty && globalProvider.getValue('name') != null) {
+      _businessNameController.text = globalProvider.getValue('name');
+    }
+
+    if (uploadedImages.isEmpty && globalProvider.getValue('portfolio_images') != null) {
+      uploadedImages = List<String>.from(globalProvider.getValue('portfolio_images'));
+    }
+
+    // Check if address data exists in global provider
+    if (_selectedAddress == null && globalProvider.getValue('address') != null) {
+      final addressData = globalProvider.getValue('address');
+      if (addressData is Map) {
+        setState(() {
+          _selectedAddress = Map<String, dynamic>.from(addressData);
+        });
+      }
     }
   }
 
@@ -53,18 +66,16 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
 
         await Future.delayed(const Duration(seconds: 2));
 
-
         setState(() {
           String fileName = image.name.isEmpty
-              ? 'kyc_${DateTime.now().millisecondsSinceEpoch}.jpeg'
+              ? 'portfolio_${DateTime.now().millisecondsSinceEpoch}.jpeg'
               : image.name;
           uploadedImages.add(fileName);
 
           // Save images globally
           Provider.of<GlobalProvider>(context, listen: false)
-              .setValue('images', uploadedImages);
+              .setPortfolioImages(uploadedImages);
         });
-
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -91,7 +102,7 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
 
       // Update images in GlobalProvider
       Provider.of<GlobalProvider>(context, listen: false)
-          .setValue('images', uploadedImages);
+          .setPortfolioImages(uploadedImages);
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -145,8 +156,41 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
     );
   }
 
-  void _addAddress() {
-    Navigator.pushNamed(context, '/location-picker');
+  Future<void> _addAddress() async {
+    try {
+      final result = await Navigator.pushNamed(context, '/location-picker');
+
+      if (result != null && result is Map<String, dynamic>) {
+        setState(() {
+          _selectedAddress = {
+            'locationName': result['locationName'] ?? 'Selected Location',
+            'fullAddress': result['address'] ?? 'Address not available',
+            'latitude': result['lat'],
+            'longitude': result['lng'],
+          };
+        });
+
+        // Save address to global provider
+        Provider.of<GlobalProvider>(context, listen: false)
+            .setAddress(_selectedAddress!);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Address selected successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error selecting address: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Future<void> _handleSubmit() async {
@@ -164,7 +208,18 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
     if (uploadedImages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please upload at least one device image'),
+          content: Text('Please upload at least one display image'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedAddress == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select business address'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
         ),
@@ -176,20 +231,23 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
       _isSubmitting = true;
     });
 
+    final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+
     // Save business name globally
-    Provider.of<GlobalProvider>(context, listen: false)
-        .setValue('name', _businessNameController.text.trim());
+    globalProvider.setBusinessDetails(name: _businessNameController.text.trim());
 
-    final globalProvider = context.read<GlobalProvider>();
-    debugPrint("=== 📤 SUBMITTING KYC WITH DATA ===");
-    debugPrint("🆔 ID Front: ${globalProvider.getValue('name')}");
-    debugPrint("🆔 ID images: ${globalProvider.getValue('images')}");
-    debugPrint("🏠 Address Front: ${globalProvider.getValue('address_front')}");
-    debugPrint("🏠 Address Back: ${globalProvider.getValue('address_back')}");
-    debugPrint("🏠 Global: ${globalProvider}");
-    debugPrint("===============================");
+    // Save uploaded images globally
+    globalProvider.setPortfolioImages(uploadedImages);
 
-    await Future.delayed(const Duration(seconds: 3));
+    // Save address globally (if not already saved)
+    globalProvider.setAddress(_selectedAddress!);
+
+    // Print the current state of globalData
+    debugPrint("=== 📦 CURRENT GLOBAL DATA ===");
+    debugPrint(globalProvider.globalData.toString());
+    debugPrint("==============================");
+
+    await Future.delayed(const Duration(seconds: 2));
 
     setState(() {
       _isSubmitting = false;
@@ -576,14 +634,14 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _selectedAddress!['locationName']!,
+                          _selectedAddress!['locationName'] ?? 'Selected Location',
                           style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _selectedAddress!['fullAddress']!,
+                          _selectedAddress!['fullAddress'] ?? 'Address not available',
                           style: GoogleFonts.lato(fontSize: 14, color: Colors.grey[600]),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],

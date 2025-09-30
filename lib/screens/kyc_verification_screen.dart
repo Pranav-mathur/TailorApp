@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -52,23 +53,43 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           return;
         }
 
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(
-        //     content: Text('Uploading $documentName...'),
-        //     backgroundColor: Colors.blue,
-        //     behavior: SnackBarBehavior.floating,
-        //   ),
-        // );
-
         // Upload document via KycProvider
         await Provider.of<KycProvider>(context, listen: false)
             .uploadDocument(file, documentType, token);
 
-        // Save uploaded URL in GlobalProvider for further steps
-        final imageUrl =
-        Provider.of<KycProvider>(context, listen: false).uploadedUrls[documentType];
-        Provider.of<GlobalProvider>(context, listen: false)
-            .setValue(documentType, imageUrl);
+        // Get the uploaded URL from KycProvider
+        final imageUrl = Provider.of<KycProvider>(context, listen: false).uploadedUrls[documentType];
+
+        if (imageUrl != null) {
+          // Save uploaded URL in GlobalProvider using specific methods
+          final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+
+          switch (documentType) {
+            case 'id_front':
+              globalProvider.setIdProofFront(imageUrl);
+              break;
+            case 'id_back':
+              globalProvider.setIdProofBack(imageUrl);
+              break;
+            case 'address_front':
+              globalProvider.setKycAddressProofFront(imageUrl);
+              break;
+            case 'address_back':
+              globalProvider.setKycAddressProofBack(imageUrl);
+              break;
+            default:
+            // Fallback to generic setValue for any other document types
+              globalProvider.setValue(documentType, imageUrl);
+          }
+
+          // Debug print to confirm data is saved
+          debugPrint("=== 📁 DOCUMENT UPLOADED TO GLOBAL PROVIDER ===");
+          debugPrint("📄 Document Type: $documentType");
+          debugPrint("🔗 URL: $imageUrl");
+          debugPrint("💾 Saved to GlobalProvider successfully");
+          debugPrint("===============================================");
+          debugPrint("$jsonEncode(globalData)");
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -104,7 +125,6 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
 
   bool get _canSubmit => context.read<KycProvider>().canSubmit;
 
-
   Future<void> _handleSubmit() async {
     if (!context.read<KycProvider>().canSubmit) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -124,21 +144,30 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     // Simulate API submission for KYC using uploaded URLs
     await Future.delayed(const Duration(seconds: 2));
 
-    // Example usage of GlobalProvider
+    // Get data from GlobalProvider using the specific getters
     final globalProvider = context.read<GlobalProvider>();
-    debugPrint("=== 📤 SUBMITTING KYC WITH DATA ===");
-    debugPrint("🆔 ID Front: ${globalProvider.getValue('id_front')}");
-    debugPrint("🆔 ID Back: ${globalProvider.getValue('id_back')}");
-    debugPrint("🏠 Address Front: ${globalProvider.getValue('address_front')}");
-    debugPrint("🏠 Address Back: ${globalProvider.getValue('address_back')}");
-    debugPrint("🏠 Global: ${globalProvider}");
-    debugPrint("===============================");
+
+    debugPrint("=== 📤 SUBMITTING KYC WITH GLOBAL PROVIDER DATA ===");
+    debugPrint("🆔 ID Proof Front: ${globalProvider.getValue('id_proof_front')}");
+    debugPrint("🆔 ID Proof Back: ${globalProvider.getValue('id_proof_back')}");
+    debugPrint("🏠 Address Proof Front: ${globalProvider.getValue('kyc_address_proof_front')}");
+    debugPrint("🏠 Address Proof Back: ${globalProvider.getValue('kyc_address_proof_back')}");
+
+    // Show data summary
+    final dataSummary = globalProvider.getDataSummary();
+    debugPrint("📊 KYC Documents Count: ${dataSummary['kyc_docs_count']}/4");
+    debugPrint("✅ Is KYC Complete: ${_areKycDocumentsComplete(globalProvider)}");
+
+    // Get the complete API payload (if you need to submit all data)
+    final apiPayload = globalProvider.getApiPayload();
+    debugPrint("📋 Complete API Payload: $apiPayload");
+    debugPrint("================================================");
 
     setState(() {
       _isSubmitting = false;
     });
 
-    // Show success dialog (unchanged)
+    // Show success dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -201,12 +230,26 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     );
   }
 
+  // Helper method to check if all KYC documents are uploaded
+  bool _areKycDocumentsComplete(GlobalProvider provider) {
+    return provider.getValue('id_proof_front') != null &&
+        provider.getValue('id_proof_back') != null &&
+        provider.getValue('kyc_address_proof_front') != null &&
+        provider.getValue('kyc_address_proof_back') != null;
+  }
 
   Widget _buildDocumentUploadItem(String documentName, String documentType) {
     final kycProvider = Provider.of<KycProvider>(context);
+    final globalProvider = Provider.of<GlobalProvider>(context);
+
     bool isUploaded = kycProvider.uploadStatus[documentType] ?? false;
     bool isUploading = kycProvider.isUploading;
     String fileName = documentFileNames[documentType] ?? '';
+
+    // Check if document exists in GlobalProvider as well
+    String? globalProviderKey = _getGlobalProviderKey(documentType);
+    bool isInGlobalProvider = globalProviderKey != null &&
+        globalProvider.getValue(globalProviderKey) != null;
 
     if (!isUploaded) {
       return Container(
@@ -223,11 +266,29 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              documentName,
-              style: GoogleFonts.lato(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    documentName,
+                    style: GoogleFonts.lato(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (isInGlobalProvider) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Saved to profile',
+                      style: GoogleFonts.lato(
+                        fontSize: 11,
+                        color: Colors.green[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             GestureDetector(
@@ -309,6 +370,27 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+                  if (isInGlobalProvider) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.cloud_done,
+                          size: 12,
+                          color: Colors.blue[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Saved to profile',
+                          style: GoogleFonts.lato(
+                            fontSize: 11,
+                            color: Colors.blue[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -345,7 +427,23 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     }
   }
 
-  // Corrected Document Section
+  // Helper method to get the corresponding GlobalProvider key
+  String? _getGlobalProviderKey(String documentType) {
+    switch (documentType) {
+      case 'id_front':
+        return 'id_proof_front';
+      case 'id_back':
+        return 'id_proof_back';
+      case 'address_front':
+        return 'kyc_address_proof_front';
+      case 'address_back':
+        return 'kyc_address_proof_back';
+      default:
+        return null;
+    }
+  }
+
+  // Document Section (unchanged)
   Widget _buildDocumentSection({
     required String title,
     required List<Map<String, String>> documents,
@@ -509,79 +607,82 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: _buildDocumentSection(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _buildDocumentSection(
                       title: 'Upload ID Proof',
                       documents: [
                         {'name': 'ID Proof Front', 'type': 'id_front'},
                         {'name': 'ID Proof Back', 'type': 'id_back'},
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    flex: 2,
-                    child: _buildDocumentSection(
+                    const SizedBox(height: 8),
+                    _buildDocumentSection(
                       title: 'Upload Address Proof',
                       documents: [
                         {'name': 'Address Proof Front', 'type': 'address_front'},
                         {'name': 'Address Proof Back', 'type': 'address_back'},
                       ],
                     ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    height: 50,
-                    margin: const EdgeInsets.symmetric(vertical: 20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: _canSubmit
-                            ? [Colors.pink.shade300, Colors.pink.shade400]
-                            : [Colors.grey.shade300, Colors.grey.shade400],
-                      ),
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: _canSubmit
-                          ? [
-                        BoxShadow(
-                          color: Colors.pink.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
-                        ),
-                      ]
-                          : [],
+                    Consumer<GlobalProvider>(
+                      builder: (context, globalProvider, child) {
+                        bool globalKycComplete = _areKycDocumentsComplete(globalProvider);
+                        return Container(
+                          width: double.infinity,
+                          height: 50,
+                          margin: const EdgeInsets.symmetric(vertical: 20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: _canSubmit
+                                  ? [Colors.pink.shade300, Colors.pink.shade400]
+                                  : [Colors.grey.shade300, Colors.grey.shade400],
+                            ),
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: _canSubmit
+                                ? [
+                              BoxShadow(
+                                color: Colors.pink.withOpacity(0.3),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ]
+                                : [],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: (_isSubmitting || !_canSubmit || !globalKycComplete)
+                                ? null
+                                : _handleSubmit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : Text(
+                              'Submit',
+                              style: GoogleFonts.lato(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _handleSubmit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                          : Text(
-                        'Submit',
-                        style: GoogleFonts.lato(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

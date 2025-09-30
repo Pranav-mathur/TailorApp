@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/tailor_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -12,70 +13,204 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final TextEditingController _searchController = TextEditingController();
 
-  // Sample JSON data that would come from API
-  final Map<String, dynamic> homeData = {
-    "businessInfo": {
-      "name": "Vishaal Tailors",
-      "logo":
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80",
-      "boostPromo": {
-        "title": "Boost Your Business",
-        "subtitle": "Get a featured spot",
-        "buttonText": "Upgrade Now"
+  // Loading and error states
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  // API data
+  Map<String, dynamic> homeData = {};
+  List<Map<String, dynamic>> allBookings = [];
+  List<Map<String, dynamic>> filteredBookings = [];
+  String _searchQuery = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchBookings();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // Method to fetch bookings from API
+  Future<void> _fetchBookings() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final tailorService = TailorService();
+
+      // Make API call to get bookings
+      final response = await tailorService.getBookings(
+        token: authProvider.token ?? "",
+      );
+
+      print('API Response: $response'); // Debug print
+
+      if (response['success'] == true) {
+        final responseData = response['data'] as Map<String, dynamic>;
+
+        setState(() {
+          _processBookingsData(responseData);
+          _isLoading = false;
+        });
+      } else {
+        throw Exception(response['message'] ?? 'Failed to fetch bookings');
       }
-    },
-    "ordersToReview": {
-      "count": 2,
-      "orders": [
-        {
-          "id": "454382",
-          "customerName": "Arjun Das",
-          "customerImage":
-          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80",
-          "amount": 2899,
-          "items": "Casual shirt, kurta",
-          "status": "Order Assigned",
-          "statusColor": "#FF6B6B"
-        }
-      ]
-    },
-    "ongoingOrders": {
-      "count": 5,
-      "orders": [
-        {
-          "id": "454382",
-          "customerName": "Bhuvesh Kumar",
-          "customerImage":
-          "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&q=80",
-          "amount": 899,
-          "items": "Formal shirt",
-          "status": "Order Pickup",
-          "statusColor": "#FF6B6B"
-        },
-        {
-          "id": "454382",
-          "customerName": "Chaitanya Rathi",
-          "customerImage":
-          "https://images.unsplash.com/photo-1494790108755-2616b332c3a2?w=100&q=80",
-          "amount": 999,
-          "items": "Kurta",
-          "status": "Stitching",
-          "statusColor": "#FF9500"
-        },
-        {
-          "id": "454382",
-          "customerName": "Aatish Kumar",
-          "customerImage":
-          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80",
-          "amount": 499,
-          "items": "Trousers",
-          "status": "Ready to Deliver",
-          "statusColor": "#34C759"
-        }
-      ]
+
+    } catch (e) {
+      print('Error fetching bookings: $e'); // Debug print
+
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString();
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading bookings: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
-  };
+  }
+
+  // Process API response and organize data
+  void _processBookingsData(Map<String, dynamic> responseData) {
+    final metaData = responseData['metaData'] as Map<String, dynamic>? ?? {};
+    final bookingsData = responseData['data'] as List<dynamic>? ?? [];
+
+    // Convert to list of maps for easier processing
+    allBookings = bookingsData.map((booking) => booking as Map<String, dynamic>).toList();
+
+    // Filter out completed and cancelled orders for main display
+    final activeBookings = allBookings.where((booking) {
+      final status = booking['status']?.toString().toLowerCase() ?? '';
+      return status != 'completed' && status != 'cancelled';
+    }).toList();
+
+    // Separate bookings by status for different sections
+    final requestedBookings = activeBookings.where((booking) {
+      return booking['status']?.toString().toLowerCase() == 'requested';
+    }).toList();
+
+    final ongoingBookings = activeBookings.where((booking) {
+      final status = booking['status']?.toString().toLowerCase() ?? '';
+      return status == 'confirmed' || status == 'in progress';
+    }).toList();
+
+    // Create home data structure
+    homeData = {
+      "businessInfo": {
+        "name": metaData['business_name'] ?? 'Your Business',
+        "logo": metaData['profile_pic'] ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80',
+        "boostPromo": {
+          "title": "Boost Your Business",
+          "subtitle": "Get a featured spot",
+          "buttonText": "Upgrade Now"
+        }
+      },
+      "ordersToReview": {
+        "count": requestedBookings.length,
+        "orders": requestedBookings.map((booking) => _formatBookingForUI(booking)).toList(),
+      },
+      "ongoingOrders": {
+        "count": ongoingBookings.length,
+        "orders": ongoingBookings.map((booking) => _formatBookingForUI(booking)).toList(),
+      },
+      "totalBookings": metaData['total_bookings'] ?? 0,
+    };
+
+    // Initialize filtered bookings
+    _filterBookings();
+
+    print('Processed home data: $homeData'); // Debug print
+  }
+
+  // Format booking data for UI consumption
+  Map<String, dynamic> _formatBookingForUI(Map<String, dynamic> booking) {
+    return {
+      "id": booking['order_id']?.toString() ?? booking['bookingId']?.toString() ?? 'N/A',
+      "customerName": booking['customer_name']?.toString() ?? 'Unknown Customer',
+      "customerImage": booking['customer_image']?.toString() ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80',
+      "amount": booking['price'] ?? 0,
+      "items": booking['category']?['name']?.toString() ?? 'Service',
+      "status": _formatStatus(booking['status']?.toString() ?? 'Unknown'),
+      "statusColor": _getStatusColor(booking['status']?.toString() ?? 'Unknown'),
+      "bookingId": booking['bookingId']?.toString() ?? '',
+      "createdAt": booking['created_at']?.toString() ?? '',
+      "updatedAt": booking['updated_at']?.toString() ?? '',
+    };
+  }
+
+  // Format status for display
+  String _formatStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'requested':
+        return 'Order Assigned';
+      case 'confirmed':
+        return 'Order Confirmed';
+      case 'in progress':
+        return 'Stitching';
+      case 'completed':
+        return 'Completed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
+    }
+  }
+
+  // Get status color
+  String _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'requested':
+        return '#FF6B6B'; // Red
+      case 'confirmed':
+        return '#FF9500'; // Orange
+      case 'in progress':
+        return '#007AFF'; // Blue
+      case 'completed':
+        return '#34C759'; // Green
+      case 'cancelled':
+        return '#8E8E93'; // Gray
+      default:
+        return '#8E8E93'; // Gray
+    }
+  }
+
+  // Filter bookings based on search query
+  void _filterBookings() {
+    if (_searchQuery.isEmpty) {
+      setState(() {
+        filteredBookings = [];
+      });
+      return;
+    }
+
+    final query = _searchQuery.toLowerCase();
+    filteredBookings = allBookings.where((booking) {
+      final orderId = booking['order_id']?.toString().toLowerCase() ?? '';
+      final customerName = booking['customer_name']?.toString().toLowerCase() ?? '';
+      final categoryName = booking['category']?['name']?.toString().toLowerCase() ?? '';
+
+      return orderId.contains(query) ||
+          customerName.contains(query) ||
+          categoryName.contains(query);
+    }).toList();
+  }
 
   void _openSidebar() {
     _scaffoldKey.currentState?.openEndDrawer();
@@ -84,288 +219,527 @@ class _HomeScreenState extends State<HomeScreen> {
   void _confirmLogout() {
     showDialog(
       context: context,
-      barrierDismissible: false, // Force user to choose
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        title: Text(
+          'Logout',
+          style: GoogleFonts.lato(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to logout?',
+          style: GoogleFonts.lato(),
+        ),
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(dialogContext).pop(); // Close dialog
+              Navigator.of(dialogContext).pop();
             },
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.lato(
+                color: Colors.grey[600],
+              ),
+            ),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.of(dialogContext).pop(); // Close dialog first
+              Navigator.of(dialogContext).pop();
 
-              // Call logout from provider
               await Provider.of<AuthProvider>(context, listen: false).logout();
 
-              // Check if widget is still mounted before navigating
               if (!mounted) return;
 
-              // Navigate to login and remove all previous routes safely
               Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
                 '/login',
                     (route) => false,
               );
             },
-            child: const Text('Logout'),
+            child: Text(
+              'Logout',
+              style: GoogleFonts.lato(
+                color: Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
+  // Refresh method
+  Future<void> _refreshBookings() async {
+    await _fetchBookings();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final businessInfo = homeData['businessInfo'];
-    final ordersToReview = homeData['ordersToReview'];
-    final ongoingOrders = homeData['ongoingOrders'];
+    if (_isLoading) {
+      return _buildLoadingScreen();
+    }
+
+    if (_errorMessage != null) {
+      return _buildErrorScreen();
+    }
+
+    final businessInfo = homeData['businessInfo'] ?? {};
+    final ordersToReview = homeData['ordersToReview'] ?? {'count': 0, 'orders': []};
+    final ongoingOrders = homeData['ongoingOrders'] ?? {'count': 0, 'orders': []};
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF8F9FA),
       endDrawer: _buildSidebar(),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Section
-              Row(
-                children: [
-                  // Business Logo
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      image: DecorationImage(
-                        image: NetworkImage(businessInfo['logo']),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Business Name
-                  Expanded(
-                    child: Text(
-                      businessInfo['name'],
-                      style: GoogleFonts.lato(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                  // Menu Button
-                  GestureDetector(
-                    onTap: _openSidebar,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.menu,
-                        color: Colors.black,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              // Boost Business Promo
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.brown.shade600,
-                      Colors.brown.shade500,
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
+        child: RefreshIndicator(
+          onRefresh: _refreshBookings,
+          color: Colors.red,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Section
+                Row(
                   children: [
+                    // Business Logo
                     Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(
-                        color: Colors.orange,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.star,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            businessInfo['boostPromo']['title'],
-                            style: GoogleFonts.lato(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Text(
-                            businessInfo['boostPromo']['subtitle'],
-                            style: GoogleFonts.lato(
-                              fontSize: 14,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
+                      width: 50,
+                      height: 50,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(12),
+                        image: DecorationImage(
+                          image: NetworkImage(businessInfo['logo'] ?? ''),
+                          fit: BoxFit.cover,
+                        ),
                       ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Business Name
+                    Expanded(
                       child: Text(
-                        businessInfo['boostPromo']['buttonText'],
+                        businessInfo['name'] ?? 'Your Business',
                         style: GoogleFonts.lato(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.brown.shade600,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                    // Menu Button
+                    GestureDetector(
+                      onTap: _openSidebar,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.menu,
+                          color: Colors.black,
+                          size: 20,
                         ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-              // Search Bar
-              Container(
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: Colors.grey[300]!),
-                ),
-                child: TextField(
-                  style: GoogleFonts.lato(fontSize: 16),
-                  decoration: InputDecoration(
-                    hintText: 'Search order ID, customer',
-                    hintStyle: GoogleFonts.lato(
-                      color: Colors.grey[500],
-                      fontSize: 16,
+                // Boost Business Promo
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.brown.shade600,
+                        Colors.brown.shade500,
+                      ],
                     ),
-                    suffixIcon: Icon(
-                      Icons.search,
-                      color: Colors.grey[500],
-                    ),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.star,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              businessInfo['boostPromo']?['title'] ?? 'Boost Your Business',
+                              style: GoogleFonts.lato(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              businessInfo['boostPromo']?['subtitle'] ?? 'Get a featured spot',
+                              style: GoogleFonts.lato(
+                                fontSize: 14,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          businessInfo['boostPromo']?['buttonText'] ?? 'Upgrade Now',
+                          style: GoogleFonts.lato(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.brown.shade600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Orders to Review Section
-              _buildOrderSection(
-                title: 'Orders to Review',
-                count: ordersToReview['count'],
-                orders: ordersToReview['orders'],
-              ),
-              const SizedBox(height: 24),
-
-              // Ongoing Orders Section
-              _buildOrderSection(
-                title: 'Ongoing Orders',
-                count: ongoingOrders['count'],
-                orders: ongoingOrders['orders'],
-              ),
-              const SizedBox(height: 24),
-
-              // Past Orders Section
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                // Search Bar
+                Container(
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    style: GoogleFonts.lato(fontSize: 16),
+                    decoration: InputDecoration(
+                      hintText: 'Search order ID, customer',
+                      hintStyle: GoogleFonts.lato(
+                        color: Colors.grey[500],
+                        fontSize: 16,
+                      ),
+                      suffixIcon: Icon(
+                        Icons.search,
+                        color: Colors.grey[500],
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
                     ),
-                  ],
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value.trim();
+                        _filterBookings();
+                      });
+                    },
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Past Orders',
-                      style: GoogleFonts.lato(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
+                const SizedBox(height: 24),
+
+                // Search Results Section
+                if (_searchQuery.isNotEmpty) ...[
+                  _buildSearchResults(),
+                  const SizedBox(height: 24),
+                ],
+
+                // Orders to Review Section (Requested status)
+                if (_searchQuery.isEmpty && ordersToReview['count'] > 0) ...[
+                  _buildOrderSection(
+                    title: 'Orders to Review',
+                    count: ordersToReview['count'],
+                    orders: ordersToReview['orders'],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Ongoing Orders Section (Confirmed & In Progress status)
+                if (_searchQuery.isEmpty && ongoingOrders['count'] > 0) ...[
+                  _buildOrderSection(
+                    title: 'Ongoing Orders',
+                    count: ongoingOrders['count'],
+                    orders: ongoingOrders['orders'],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Show empty state if no active orders and no search
+                if (_searchQuery.isEmpty && ordersToReview['count'] == 0 && ongoingOrders['count'] == 0) ...[
+                  _buildEmptyState(),
+                  const SizedBox(height: 24),
+                ],
+
+                // Past Orders Section
+                if (_searchQuery.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushNamed(context, '/past-orders');
-                      },
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'View All Past Orders',
-                            style: GoogleFonts.lato(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black,
-                            ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Past Orders',
+                          style: GoogleFonts.lato(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
                           ),
-                          Icon(
-                            Icons.chevron_right,
-                            color: Colors.grey[600],
+                        ),
+                        const SizedBox(height: 16),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.pushNamed(context, '/past-orders');
+                          },
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'View All Past Orders',
+                                style: GoogleFonts.lato(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right,
+                                color: Colors.grey[600],
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Loading screen
+  Widget _buildLoadingScreen() {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(
+              color: Colors.red,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Loading your bookings...',
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Error screen
+  Widget _buildErrorScreen() {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red[300],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Failed to load bookings',
+                style: GoogleFonts.lato(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _errorMessage ?? 'Unknown error occurred',
+                style: GoogleFonts.lato(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _refreshBookings,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[400],
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'Retry',
+                  style: GoogleFonts.lato(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  // Empty state widget
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.inbox_outlined,
+            size: 64,
+            color: Colors.grey[300],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No Active Orders',
+            style: GoogleFonts.lato(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'You don\'t have any pending or ongoing orders at the moment.',
+            style: GoogleFonts.lato(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Search results widget
+  Widget _buildSearchResults() {
+    if (filteredBookings.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(
+              Icons.search_off_outlined,
+              size: 48,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No results found',
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Try searching with different keywords',
+              style: GoogleFonts.lato(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildOrderSection(
+      title: 'Search Results',
+      count: filteredBookings.length,
+      orders: filteredBookings.map((booking) => _formatBookingForUI(booking)).toList(),
     );
   }
 
@@ -415,7 +789,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, '/order-details');
+        Navigator.pushNamed(
+          context,
+          '/order-details',
+          arguments: order['bookingId'],
+        );
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
@@ -545,6 +923,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               color: statusColor,
                             ),
                             overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       ),
@@ -644,7 +1023,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     _buildMenuItem(
                       icon: Icons.headset_mic_outlined,
                       title: 'Contact Us',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.pop(context);
+                        // Add contact us navigation or functionality
+                      },
                     ),
                     _buildMenuItem(
                       icon: Icons.logout_outlined,
