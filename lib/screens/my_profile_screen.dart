@@ -1233,7 +1233,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                           image: DecorationImage(
-                            image: NetworkImage('https://tailorapp-uploads.s3.us-east-1.amazonaws.com/uploads/1759665077813-269001256.jpg'),
+                            image: NetworkImage(item['image']),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -1309,13 +1309,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
-        children: gallery.entries.map((entry) {
-          final subcategory = entry.key;
-          final items = entry.value as Map<String, dynamic>;
+        children: gallery.entries.map((categoryEntry) {
+          final categoryKey = categoryEntry.key; // e.g., 'mens_blazers'
+          final subcategories = categoryEntry.value as Map<String, dynamic>;
 
           return Column(
-            children: items.entries.map((subEntry) {
-              final itemName = subEntry.key;
+            children: subcategories.entries.map((subEntry) {
+              final subcategoryKey = subEntry.key; // e.g., 'formal_blazers'
               final itemData = subEntry.value as Map<String, dynamic>;
               final images = itemData['images'] as List<dynamic>;
               final categoryId = itemData['category_id'] as String;
@@ -1388,7 +1388,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                       ),
                       itemCount: images.length,
                       itemBuilder: (context, index) {
-                        final imagePath = images[index];
+                        final imagePath = images[index] as String;
 
                         return Container(
                           decoration: BoxDecoration(

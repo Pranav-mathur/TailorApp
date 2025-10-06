@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:tailor_app/screens/upgrade_profile_screen.dart';
 
 
 import 'providers/global_provider.dart';
@@ -61,6 +62,7 @@ class MyApp extends StatelessWidget {
         '/past-orders': (context) => const PastOrdersScreen(),
         '/my-profile': (context) => const MyProfileScreen(),
         '/bank-details': (context) => const BankDetailsScreen(),
+        '/upgrade-profile': (context) => const UpgradeProfileScreen(),
       },
     );
   }

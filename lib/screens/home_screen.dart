@@ -68,9 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
               (route) => false,
         );
         throw Exception(response['message'] ?? 'Failed to fetch bookings');
-
       }
-
     } catch (e) {
       print('Error fetching bookings: $e'); // Debug print
 
@@ -94,11 +92,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Process API response and organize data
   void _processBookingsData(Map<String, dynamic> responseData) {
-    final metaData = responseData['metaData'] as Map<String, dynamic>? ?? {};
     final bookingsData = responseData['data'] as List<dynamic>? ?? [];
+    final pagination = responseData['pagination'] as Map<String, dynamic>? ?? {};
 
     // Convert to list of maps for easier processing
     allBookings = bookingsData.map((booking) => booking as Map<String, dynamic>).toList();
+
+    // Get tailor details from first booking (if available)
+    Map<String, dynamic>? tailorDetails;
+    if (allBookings.isNotEmpty && allBookings[0]['tailor_details'] != null) {
+      tailorDetails = allBookings[0]['tailor_details'] as Map<String, dynamic>;
+    }
 
     // Filter out completed and cancelled orders for main display
     final activeBookings = allBookings.where((booking) {
@@ -119,8 +123,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // Create home data structure
     homeData = {
       "businessInfo": {
-        "name": metaData['business_name'] ?? 'Your Business',
-        "logo": metaData['profile_pic'] ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80',
+        "name": tailorDetails?['name'] ?? 'Your Business',
+        "logo": tailorDetails?['profile_pic'] ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80',
         "boostPromo": {
           "title": "Boost Your Business",
           "subtitle": "Get a featured spot",
@@ -135,7 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
         "count": ongoingBookings.length,
         "orders": ongoingBookings.map((booking) => _formatBookingForUI(booking)).toList(),
       },
-      "totalBookings": metaData['total_bookings'] ?? 0,
+      "totalBookings": pagination['totalCount'] ?? 0,
     };
 
     // Initialize filtered bookings
@@ -146,17 +150,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Format booking data for UI consumption
   Map<String, dynamic> _formatBookingForUI(Map<String, dynamic> booking) {
+    final bookingId = booking['bookingId']?.toString() ?? '';
+    final orderId = bookingId.length >= 5 ? bookingId.substring(0, 5) : bookingId;
+
+    final customer = booking['customer'] as Map<String, dynamic>? ?? {};
+    final category = booking['category'] as Map<String, dynamic>? ?? {};
+
     return {
-      "id": booking['order_id']?.toString() ?? booking['bookingId']?.toString() ?? 'N/A',
-      "customerName": booking['customer_name']?.toString() ?? 'Unknown Customer',
-      "customerImage": booking['customer_image']?.toString() ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80',
-      "amount": booking['price'] ?? 0,
-      "items": booking['category']?['name']?.toString() ?? 'Service',
+      "id": orderId,
+      "customerName": customer['name']?.toString() ?? 'Unknown Customer',
+      "customerImage": customer['image']?.toString() ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80',
+      "amount": category['price'] ?? 0,
+      "items": category['categoryId']?['name']?.toString() ??
+          (category['subCategoryName']?.toString() ?? 'Service'),
       "status": _formatStatus(booking['status']?.toString() ?? 'Unknown'),
       "statusColor": _getStatusColor(booking['status']?.toString() ?? 'Unknown'),
-      "bookingId": booking['bookingId']?.toString() ?? '',
-      "createdAt": booking['created_at']?.toString() ?? '',
-      "updatedAt": booking['updated_at']?.toString() ?? '',
+      "bookingId": bookingId,
+      "createdAt": booking['createdAt']?.toString() ?? '',
     };
   }
 
@@ -207,11 +217,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final query = _searchQuery.toLowerCase();
     filteredBookings = allBookings.where((booking) {
-      final orderId = booking['order_id']?.toString().toLowerCase() ?? '';
-      final customerName = booking['customer_name']?.toString().toLowerCase() ?? '';
-      final categoryName = booking['category']?['name']?.toString().toLowerCase() ?? '';
+      final bookingId = booking['bookingId']?.toString().toLowerCase() ?? '';
+      final customer = booking['customer'] as Map<String, dynamic>? ?? {};
+      final customerName = customer['name']?.toString().toLowerCase() ?? '';
+      final category = booking['category'] as Map<String, dynamic>? ?? {};
+      final categoryName = category['categoryId']?['name']?.toString().toLowerCase() ?? '';
 
-      return orderId.contains(query) ||
+      return bookingId.contains(query) ||
           customerName.contains(query) ||
           categoryName.contains(query);
     }).toList();
@@ -417,21 +429,26 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          businessInfo['boostPromo']?['buttonText'] ?? 'Upgrade Now',
-                          style: GoogleFonts.lato(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.brown.shade600,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/upgrade-profile');
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            businessInfo['boostPromo']?['buttonText'] ?? 'Upgrade Now',
+                            style: GoogleFonts.lato(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.brown.shade600,
+                            ),
                           ),
                         ),
                       ),
@@ -792,12 +809,30 @@ class _HomeScreenState extends State<HomeScreen> {
     Color statusColor =
     Color(int.parse(order['statusColor'].replaceFirst('#', '0xFF')));
 
+    // Find the full booking data from allBookings
+    final fullBooking = allBookings.firstWhere(
+          (booking) => booking['bookingId'] == order['bookingId'],
+      orElse: () => <String, dynamic>{},
+    );
+
     return GestureDetector(
       onTap: () {
+        if (fullBooking.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Unable to load order details'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
+
+        // Pass the full booking object
         Navigator.pushNamed(
           context,
           '/order-details',
-          arguments: order['bookingId'],
+          arguments: fullBooking,
         );
       },
       child: Container(
@@ -1015,6 +1050,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.pushNamed(context, '/bank-details');
                       },
                     ),
+                    _buildMenuItem(
+                      icon: Icons.star_outline,
+                      title: 'Upgrade Profile',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/upgrade-profile');
+                      },
+                    ),
                     const SizedBox(height: 32),
                     Text(
                       'Settings & Support',
@@ -1096,21 +1139,27 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      'Upgrade',
-                      style: GoogleFonts.lato(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.brown.shade600,
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/upgrade-profile');
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        'Upgrade',
+                        style: GoogleFonts.lato(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.brown.shade600,
+                        ),
                       ),
                     ),
                   ),
