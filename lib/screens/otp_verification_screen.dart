@@ -57,12 +57,20 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
     if (!mounted) return;
 
-    if (success) {
-      Navigator.pushNamedAndRemoveUntil(
-        context,
-        '/kyc',
-            (route) => false,
-      );
+    if (success != null && success["token"] != null && success["token"].length > 0) {
+      if (success["is_new_user"] == true) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/kyc',
+              (route) => false,
+        );
+      } else {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/home',
+              (route) => false,
+        );
+      }
     } else {
       _showErrorSnackBar(authProvider.error ?? "OTP verification failed");
       _clearOtpFields();

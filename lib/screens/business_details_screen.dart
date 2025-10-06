@@ -3,7 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
+import 'package:path/path.dart' as path;
 import '../providers/global_provider.dart';
+import '../providers/kyc_provider.dart';
+import '../providers/auth_provider.dart';
 
 class BusinessDetailsScreen extends StatefulWidget {
   const BusinessDetailsScreen({super.key});
@@ -16,8 +19,9 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
   final TextEditingController _businessNameController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
-  List<String> uploadedImages = [];
+  List<Map<String, String>> uploadedImages = []; // Stores {fileName, url}
   bool _isSubmitting = false;
+  bool _isUploadingImage = false;
   Map<String, dynamic>? _selectedAddress;
 
   @override
@@ -32,21 +36,33 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
     }
 
     if (uploadedImages.isEmpty && globalProvider.getValue('portfolio_images') != null) {
-      uploadedImages = List<String>.from(globalProvider.getValue('portfolio_images'));
+      final portfolioImages = globalProvider.getValue('portfolio_images');
+      if (portfolioImages is List) {
+        setState(() {
+          // Convert List<String> URLs to List<Map<String, String>>
+          uploadedImages = portfolioImages.map<Map<String, String>>((url) {
+            final urlString = url.toString();
+            final fileName = urlString.split('/').last; // Extract filename from URL
+            return {
+              'fileName': fileName,
+              'url': urlString,
+            };
+          }).toList();
+        });
+      }
     }
 
     // Check if address data exists in global provider
-    if (_selectedAddress == null && globalProvider.getValue('address') != null) {
-      final addressData = globalProvider.getValue('address');
-      if (addressData is Map) {
-        setState(() {
-          _selectedAddress = Map<String, dynamic>.from(addressData);
-        });
-      }
+    if (_selectedAddress == null && globalProvider.getAddress() != null) {
+      setState(() {
+        _selectedAddress = globalProvider.getAddress();
+      });
     }
   }
 
   Future<void> _uploadDisplayImages() async {
+    if (_isUploadingImage) return;
+
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -56,41 +72,94 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
       );
 
       if (image != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Processing image...'),
-            backgroundColor: Colors.blue,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        await Future.delayed(const Duration(seconds: 2));
-
         setState(() {
-          String fileName = image.name.isEmpty
-              ? 'portfolio_${DateTime.now().millisecondsSinceEpoch}.jpeg'
-              : image.name;
-          uploadedImages.add(fileName);
-
-          // Save images globally
-          Provider.of<GlobalProvider>(context, listen: false)
-              .setPortfolioImages(uploadedImages);
+          _isUploadingImage = true;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Image uploaded successfully!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        final file = File(image.path);
+        final fileName = path.basename(image.path);
+
+        // Get token from AuthProvider
+        final token = Provider.of<AuthProvider>(context, listen: false).token;
+        if (token == null) {
+          setState(() {
+            _isUploadingImage = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('User not logged in.'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          return;
+        }
+
+        // Upload document via KycProvider (reusing for portfolio images)
+        // Using a custom document type for portfolio images
+        final documentType = 'portfolio_${DateTime.now().millisecondsSinceEpoch}';
+        await Provider.of<KycProvider>(context, listen: false)
+            .uploadDocument(file, documentType, token);
+
+        // Get the uploaded URL from KycProvider
+        final imageUrl = Provider.of<KycProvider>(context, listen: false).uploadedUrls[documentType];
+
+        if (imageUrl != null) {
+          setState(() {
+            uploadedImages.add({
+              'fileName': fileName,
+              'url': imageUrl,
+            });
+            _isUploadingImage = false;
+          });
+
+          // Save images globally (extract URLs only)
+          final imageUrls = uploadedImages.map((img) => img['url']!).toList();
+          Provider.of<GlobalProvider>(context, listen: false)
+              .setPortfolioImages(imageUrls);
+
+          debugPrint("=== 📸 PORTFOLIO IMAGE UPLOADED ===");
+          debugPrint("📄 File Name: $fileName");
+          debugPrint("🔗 URL: $imageUrl");
+          debugPrint("💾 Total Images: ${uploadedImages.length}");
+          debugPrint("===================================");
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Image uploaded successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          setState(() {
+            _isUploadingImage = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Upload failed - no URL returned'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error uploading image: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 3),
         ),
       );
     }
@@ -100,9 +169,10 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
     setState(() {
       uploadedImages.removeAt(index);
 
-      // Update images in GlobalProvider
+      // Update images in GlobalProvider (extract URLs only)
+      final imageUrls = uploadedImages.map((img) => img['url']!).toList();
       Provider.of<GlobalProvider>(context, listen: false)
-          .setPortfolioImages(uploadedImages);
+          .setPortfolioImages(imageUrls);
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -110,84 +180,153 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
         content: Text('Image removed'),
         backgroundColor: Colors.orange,
         behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
       ),
     );
   }
 
-  void _viewImage(String fileName) {
+  void _viewImage(String fileName, String imageUrl) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Image Preview', style: GoogleFonts.lato()),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.image, size: 50, color: Colors.grey[500]),
-                    const SizedBox(height: 8),
-                    Text(
-                      fileName,
-                      style: GoogleFonts.lato(fontSize: 12),
-                      textAlign: TextAlign.center,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Image Preview',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
-                  ],
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Image preview
+              Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 400),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        padding: const EdgeInsets.all(40),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image, size: 50, color: Colors.grey[400]),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Unable to load image',
+                              style: GoogleFonts.lato(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        padding: const EdgeInsets.all(60),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close', style: GoogleFonts.lato()),
+              const SizedBox(height: 12),
+
+              // File name
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Text(
+                  fileName,
+                  style: GoogleFonts.lato(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
   Future<void> _addAddress() async {
     try {
-      final result = await Navigator.pushNamed(context, '/location-picker');
+      final result = await Navigator.pushNamed(context, '/add-address');
 
-      if (result != null && result is Map<String, dynamic>) {
-        setState(() {
-          _selectedAddress = {
-            'locationName': result['locationName'] ?? 'Selected Location',
-            'fullAddress': result['address'] ?? 'Address not available',
-            'latitude': result['lat'],
-            'longitude': result['lng'],
-          };
-        });
+      if (result == true) {
+        final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+        final address = globalProvider.getAddress();
 
-        // Save address to global provider
-        Provider.of<GlobalProvider>(context, listen: false)
-            .setAddress(_selectedAddress!);
+        if (address != null) {
+          setState(() {
+            _selectedAddress = address;
+          });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Address selected successfully!'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Address saved successfully!'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error selecting address: ${e.toString()}'),
+          content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
         ),
       );
     }
@@ -200,6 +339,7 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
           content: Text('Please enter business name'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
         ),
       );
       return;
@@ -211,6 +351,7 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
           content: Text('Please upload at least one display image'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
         ),
       );
       return;
@@ -222,6 +363,7 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
           content: Text('Please select business address'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
         ),
       );
       return;
@@ -236,11 +378,9 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
     // Save business name globally
     globalProvider.setBusinessDetails(name: _businessNameController.text.trim());
 
-    // Save uploaded images globally
-    globalProvider.setPortfolioImages(uploadedImages);
-
-    // Save address globally (if not already saved)
-    globalProvider.setAddress(_selectedAddress!);
+    // Save uploaded images globally (extract URLs only)
+    final imageUrls = uploadedImages.map((img) => img['url']!).toList();
+    globalProvider.setPortfolioImages(imageUrls);
 
     // Print the current state of globalData
     debugPrint("=== 📦 CURRENT GLOBAL DATA ===");
@@ -313,6 +453,17 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
         ],
       ),
     );
+  }
+
+  String _getAddressDisplay() {
+    if (_selectedAddress == null) return '';
+
+    final city = _selectedAddress!['city'] ?? '';
+    final street = _selectedAddress!['street'] ?? '';
+    final state = _selectedAddress!['state'] ?? '';
+    final pincode = _selectedAddress!['pincode'] ?? '';
+
+    return '$street, $city, $state - $pincode';
   }
 
   @override
@@ -443,34 +594,45 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
                   children: [
                     // Upload button
                     GestureDetector(
-                      onTap: _uploadDisplayImages,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            uploadedImages.isEmpty
-                                ? 'Upload Display Image'
-                                : 'Upload Display Image(s)',
-                            style: GoogleFonts.lato(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black,
-                            ),
-                          ),
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.red.shade300,
-                                width: 2,
+                      onTap: _isUploadingImage ? null : _uploadDisplayImages,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              uploadedImages.isEmpty
+                                  ? 'Upload Display Image'
+                                  : 'Upload Display Image(s)',
+                              style: GoogleFonts.lato(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: _isUploadingImage ? Colors.grey[400] : Colors.black,
                               ),
                             ),
-                            child: Icon(Icons.upload, color: Colors.red.shade400, size: 16),
-                          ),
-                        ],
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.red.shade50,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.red.shade300,
+                                  width: 2,
+                                ),
+                              ),
+                              child: _isUploadingImage
+                                  ? Padding(
+                                padding: const EdgeInsets.all(6.0),
+                                child: CircularProgressIndicator(
+                                  color: Colors.red,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                                  : Icon(Icons.upload, color: Colors.red.shade400, size: 16),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
@@ -479,7 +641,8 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
                       const SizedBox(height: 16),
                       ...uploadedImages.asMap().entries.map((entry) {
                         int index = entry.key;
-                        String fileName = entry.value;
+                        String fileName = entry.value['fileName'] ?? '';
+                        String imageUrl = entry.value['url'] ?? '';
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -502,13 +665,43 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
                               ),
                               const SizedBox(width: 12),
                               Expanded(
-                                child: Text(
-                                  fileName,
-                                  style: GoogleFonts.lato(fontSize: 14, color: Colors.black),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      fileName,
+                                      style: GoogleFonts.lato(
+                                        fontSize: 14,
+                                        color: Colors.black,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.cloud_done,
+                                          size: 12,
+                                          color: Colors.blue[600],
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Uploaded',
+                                          style: GoogleFonts.lato(
+                                            fontSize: 11,
+                                            color: Colors.blue[600],
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
                               ),
                               GestureDetector(
-                                onTap: () => _viewImage(fileName),
+                                onTap: () => _viewImage(fileName, imageUrl),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                   child: Text(
@@ -634,12 +827,12 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _selectedAddress!['locationName'] ?? 'Selected Location',
+                          _selectedAddress!['building'] ?? 'Business Address',
                           style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _selectedAddress!['fullAddress'] ?? 'Address not available',
+                          _getAddressDisplay(),
                           style: GoogleFonts.lato(fontSize: 14, color: Colors.grey[600]),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,

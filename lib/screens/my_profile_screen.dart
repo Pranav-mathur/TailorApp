@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import 'dart:io';
+import '../providers/auth_provider.dart';
+import '../services/tailor_service.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -12,168 +15,21 @@ class MyProfileScreen extends StatefulWidget {
 
 class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderStateMixin {
   late TabController _tabController;
-  int _selectedCategoryIndex = 0; // Track selected category index
+  int _selectedCategoryIndex = 0;
   final ImagePicker _picker = ImagePicker();
   List<XFile> _selectedImages = [];
-  String _currentUploadCategory = '';
-  String _currentUploadSubcategory = '';
-  String _currentUploadItem = '';
 
-  // Category data for the card-style selection
-  final List<Map<String, dynamic>> categories = [
-    {
-      "name": "Men",
-      "image": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80",
-      "color": Color(0xFFE8F5E8),
-    },
-    {
-      "name": "Women",
-      "image": "https://images.unsplash.com/photo-1494790108755-2616b332c3a2?w=200&q=80",
-      "color": Color(0xFFFFF4E6),
-    },
-    {
-      "name": "Designers",
-      "image": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&q=80",
-      "color": Color(0xFFF0E6FF),
-    },
-  ];
-
-  // Profile data that would come from API
-  final Map<String, dynamic> profileData = {
-    "businessProfile": {
-      "name": "Vishaal Tailors",
-      "logo": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80",
-      "rating": 4.9,
-      "totalReviews": 200,
-      "googleRating": 4.7,
-      "deliveryTime": "4 day delivery",
-      "startingPrice": 899,
-      "isOnline": true,
-      "description": "Premium tailoring services with 15+ years of experience",
-      "address": "Shop 232, MG Road, Bangalore",
-      "phone": "+91 98765 43210"
-    },
-    "services": {
-      "men": [
-        {
-          "category": "Shirts",
-          "items": [
-            {
-              "name": "Casual shirts",
-              "price": 1999,
-              "image": "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=300&q=80",
-              "deliveryTime": "3-4 days"
-            },
-            {
-              "name": "Formal shirts",
-              "price": 899,
-              "image": "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=300&q=80",
-              "deliveryTime": "2-3 days"
-            }
-          ]
-        },
-        {
-          "category": "Suits & Blazers",
-          "items": [
-            {
-              "name": "3 piece",
-              "price": 1999,
-              "image": "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=300&q=80",
-              "deliveryTime": "7-10 days"
-            },
-            {
-              "name": "2 piece",
-              "price": 899,
-              "image": "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=300&q=80",
-              "deliveryTime": "5-7 days"
-            }
-          ]
-        }
-      ],
-      "women": [
-        {
-          "category": "Dresses",
-          "items": [
-            {
-              "name": "Party dresses",
-              "price": 2499,
-              "image": "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=300&q=80",
-              "deliveryTime": "5-7 days"
-            }
-          ]
-        }
-      ],
-      "designers": [
-        {
-          "category": "Wedding Collection",
-          "items": [
-            {
-              "name": "Lehenga",
-              "price": 5999,
-              "image": "https://images.unsplash.com/photo-1583391265928-4365b2d5f814?w=300&q=80",
-              "deliveryTime": "15-20 days"
-            }
-          ]
-        }
-      ]
-    },
-    "gallery": {
-      "men": {
-        "shirts": {
-          "casual": [
-            "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=300&q=80",
-            "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=300&q=80",
-            "https://images.unsplash.com/photo-1602810318660-d1e50ab47767?w=300&q=80",
-            "https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?w=300&q=80",
-            "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&q=80",
-            "https://images.unsplash.com/photo-1602810316498-ab67cf68c8e1?w=300&q=80"
-          ],
-          "formal": [
-            "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=300&q=80",
-            "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=300&q=80",
-            "https://images.unsplash.com/photo-1602810318660-d1e50ab47767?w=300&q=80"
-          ]
-        }
-      },
-      "women": {
-        "dresses": {
-          "party": [
-            "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=300&q=80",
-            "https://images.unsplash.com/photo-1566479179817-3aa77ca5e8b2?w=300&q=80"
-          ]
-        }
-      },
-      "designers": {
-        "wedding": {
-          "lehenga": [
-            "https://images.unsplash.com/photo-1583391265928-4365b2d5f814?w=300&q=80",
-            "https://images.unsplash.com/photo-1631062188012-d6b313e82e4b?w=300&q=80"
-          ]
-        }
-      }
-    },
-    "reviews": [
-      {
-        "customerName": "Arjun Das",
-        "rating": 5,
-        "review": "Excellent tailoring work. Very professional and timely delivery.",
-        "date": "2024-07-10",
-        "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80"
-      },
-      {
-        "customerName": "Priya Sharma",
-        "rating": 4,
-        "review": "Great quality and fitting. Highly recommended!",
-        "date": "2024-07-08",
-        "avatar": "https://images.unsplash.com/photo-1494790108755-2616b332c3a2?w=100&q=80"
-      }
-    ]
-  };
+  bool _isLoading = true;
+  Map<String, dynamic>? _apiData;
+  Map<String, dynamic>? _profileData;
+  List<Map<String, dynamic>> _categories = [];
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _loadProfileData();
   }
 
   @override
@@ -182,20 +38,270 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     super.dispose();
   }
 
-  void _toggleOnlineStatus() {
+  Future<void> _loadProfileData() async {
     setState(() {
-      profileData['businessProfile']['isOnline'] =
-      !profileData['businessProfile']['isOnline'];
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // Get token from your Auth Provider
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+      final tailorService = TailorService();
+      // Call the API
+      final result = await tailorService.getTailorProfile(token: authProvider.token ?? "",);
+      print(result);
+
+      if (result['success']) {
+        final apiData = result['data'];
+        _processApiData(apiData);
+      } else {
+        setState(() {
+          _errorMessage = result['error'];
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error loading profile: ${e.toString()}';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _processApiData(Map<String, dynamic> apiData) {
+    _apiData = apiData;
+
+    // Extract unique categories based on gender
+    final categoriesMap = <String, Map<String, dynamic>>{};
+
+    for (var category in apiData['categories']) {
+      final gender = category['category_gender'] as String;
+      String categoryKey;
+
+      if (gender == 'men') {
+        categoryKey = 'Men';
+      } else if (gender == 'women') {
+        categoryKey = 'Women';
+      } else {
+        categoryKey = 'Unisex'; // or 'Kids' based on your logic
+      }
+
+      if (!categoriesMap.containsKey(categoryKey)) {
+        categoriesMap[categoryKey] = {
+          'name': categoryKey,
+          'image': _getCategoryImage(categoryKey),
+          'color': _getCategoryColor(categoryKey),
+          'gender': gender,
+        };
+      }
+    }
+
+    // Get delivery times and calculate average
+    final deliveryTimes = apiData['categories']
+        .map((c) => c['delivery_time'] as String)
+        .toList();
+    final avgDeliveryTime = deliveryTimes.isNotEmpty
+        ? deliveryTimes.first
+        : '3-5 days';
+
+    // Get minimum price
+    final prices = apiData['categories']
+        .map((c) => c['price'] as int)
+        .toList();
+    final minPrice = prices.isNotEmpty
+        ? prices.reduce((a, b) => a < b ? a : b)
+        : 0;
+
+    // Transform API data to component structure
+    final transformedData = {
+      'businessProfile': {
+        'name': apiData['name'] ?? 'Tailor',
+        'logo': apiData['profile_pic'] ?? '',
+        'rating': (apiData['ratingsAndReviews']['avg_rating'] ?? 0.0).toDouble(),
+        'totalReviews': apiData['ratingsAndReviews']['review_count'] ?? 0,
+        'googleRating': (apiData['ratingsAndReviews']['avg_rating'] ?? 0.0).toDouble(),
+        'deliveryTime': avgDeliveryTime,
+        'startingPrice': minPrice,
+        'isOnline': true,
+        'description': 'Professional tailoring services',
+        'address': _formatAddress(apiData['address']),
+        'phone': apiData['address']['mobile'] ?? '',
+        'kyc_done': apiData['kyc_done'] ?? false,
+        'is_sponsored': apiData['is_sponsored'] ?? false,
+      },
+      'services': _transformServices(apiData['categories']),
+      'gallery': _transformGallery(apiData['categories']),
+      'reviews': [], // Reviews would come from a separate API call if needed
+    };
+
+    setState(() {
+      _profileData = transformedData;
+      _categories = categoriesMap.values.toList();
+      if (_categories.isNotEmpty) {
+        _selectedCategoryIndex = 0;
+      }
+    });
+  }
+
+  String _getCategoryImage(String category) {
+    switch (category) {
+      case 'Men':
+        return 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80';
+      case 'Women':
+        return 'https://images.unsplash.com/photo-1494790108755-2616b332c3a2?w=200&q=80';
+      case 'Unisex':
+        return 'https://images.unsplash.com/photo-1503944583220-79d8926ad5e2?w=200&q=80';
+      default:
+        return 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&q=80';
+    }
+  }
+
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'Men':
+        return const Color(0xFFE8F5E8);
+      case 'Women':
+        return const Color(0xFFFFF4E6);
+      case 'Unisex':
+        return const Color(0xFFE3F2FD);
+      default:
+        return const Color(0xFFF0E6FF);
+    }
+  }
+
+  String _formatAddress(Map<String, dynamic> address) {
+    final parts = <String>[];
+    if (address['street'] != null && address['street'].toString().isNotEmpty) {
+      parts.add(address['street']);
+    }
+    if (address['city'] != null && address['city'].toString().isNotEmpty) {
+      parts.add(address['city']);
+    }
+    if (address['state'] != null && address['state'].toString().isNotEmpty) {
+      parts.add(address['state']);
+    }
+    if (address['pincode'] != null && address['pincode'].toString().isNotEmpty) {
+      parts.add(address['pincode']);
+    }
+    return parts.join(', ');
+  }
+
+  Map<String, List<Map<String, dynamic>>> _transformServices(List<dynamic> categories) {
+    final services = <String, List<Map<String, dynamic>>>{
+      'men': [],
+      'women': [],
+      'unisex': [],
+    };
+
+    // Group by category_name and gender - explicitly type the map
+    final groupedCategories = <String, Map<String, dynamic>>{};
+
+    for (var category in categories) {
+      final gender = category['category_gender'] as String;
+      final categoryName = category['category_name'] as String;
+      final key = '$gender-$categoryName';
+
+      if (!groupedCategories.containsKey(key)) {
+        groupedCategories[key] = <String, dynamic>{
+          'gender': gender,
+          'category_name': categoryName,
+          'items': <dynamic>[],
+        };
+      }
+      (groupedCategories[key]!['items'] as List).add(category);
+    }
+
+    // Transform grouped categories into service items
+    for (var entry in groupedCategories.values) {
+      final gender = entry['gender'] as String;
+      final categoryName = entry['category_name'] as String;
+      final items = entry['items'] as List<dynamic>;
+
+      final serviceItem = {
+        'category': categoryName,
+        'items': items.map((item) => {
+          'name': item['sub_category_name'],
+          'price': item['price'],
+          'image': (item['display_images'] as List).isNotEmpty
+              ? item['display_images'][0]
+              : 'https://via.placeholder.com/300',
+          'deliveryTime': item['delivery_time'],
+          'category_id': item['category_id'],
+        }).toList(),
+      };
+
+      if (gender == 'men') {
+        services['men']!.add(serviceItem);
+      } else if (gender == 'women') {
+        services['women']!.add(serviceItem);
+      } else {
+        services['unisex']!.add(serviceItem);
+      }
+    }
+
+    return services;
+  }
+
+  Map<String, Map<String, Map<String, dynamic>>> _transformGallery(List<dynamic> categories) {
+    final gallery = <String, Map<String, Map<String, dynamic>>>{
+      'men': {},
+      'women': {},
+      'unisex': {},
+    };
+
+    for (var category in categories) {
+      final gender = category['category_gender'] as String;
+      final categoryName = (category['category_name'] as String)
+          .toLowerCase()
+          .replaceAll(' ', '_')
+          .replaceAll("'", '');
+      final subcategoryName = (category['sub_category_name'] as String)
+          .toLowerCase()
+          .replaceAll(' ', '_')
+          .replaceAll("'", '');
+      final images = List<String>.from(category['display_images']);
+      final categoryId = category['category_id'] as String;
+
+      String genderKey = gender;
+      if (gender != 'men' && gender != 'women') {
+        genderKey = 'unisex';
+      }
+
+      if (!gallery[genderKey]!.containsKey(categoryName)) {
+        gallery[genderKey]![categoryName] = {};
+      }
+
+      gallery[genderKey]![categoryName]![subcategoryName] = {
+        'images': images,
+        'category_id': categoryId,
+        'display_name': category['sub_category_name'],
+        'category_display_name': category['category_name'],
+      };
+    }
+    print(gallery);
+    return gallery;
+  }
+
+  void _toggleOnlineStatus() {
+    if (_profileData == null) return;
+
+    setState(() {
+      _profileData!['businessProfile']['isOnline'] =
+      !_profileData!['businessProfile']['isOnline'];
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-            profileData['businessProfile']['isOnline']
+            _profileData!['businessProfile']['isOnline']
                 ? 'You are now online'
                 : 'You are now offline'
         ),
-        backgroundColor: profileData['businessProfile']['isOnline']
+        backgroundColor: _profileData!['businessProfile']['isOnline']
             ? Colors.green
             : Colors.orange,
         behavior: SnackBarBehavior.floating,
@@ -203,12 +309,13 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     );
   }
 
-  void _showAddPhotosBottomSheet(String category, String subcategory, String item) {
+  void _showAddPhotosBottomSheet(
+      String categoryId,
+      String categoryDisplayName,
+      String subcategoryDisplayName,
+      ) {
     setState(() {
       _selectedImages.clear();
-      _currentUploadCategory = category;
-      _currentUploadSubcategory = subcategory;
-      _currentUploadItem = item;
     });
 
     showModalBottomSheet(
@@ -247,7 +354,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                     Row(
                       children: [
                         Text(
-                          '${category.toUpperCase()}',
+                          categoryDisplayName.toUpperCase(),
                           style: GoogleFonts.lato(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -255,7 +362,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                           ),
                         ),
                         Text(
-                          ' • ${subcategory.toUpperCase()}',
+                          ' • ${subcategoryDisplayName.toUpperCase()}',
                           style: GoogleFonts.lato(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
@@ -291,7 +398,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                             color: Colors.grey[100],
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(
+                          child: const Icon(
                             Icons.cloud_upload_outlined,
                             color: Colors.red,
                             size: 20,
@@ -309,7 +416,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
-                      // Photo grid or placeholder
                       Expanded(
                         child: _selectedImages.isEmpty
                             ? _buildPhotoPlaceholder(setModalState)
@@ -323,7 +429,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         margin: const EdgeInsets.only(bottom: 20, top: 20),
                         child: ElevatedButton(
                           onPressed: _selectedImages.isNotEmpty
-                              ? () => _addPhotosToGallery(context)
+                              ? () => _uploadPhotosToAPI(context, categoryId)
                               : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: _selectedImages.isNotEmpty
@@ -405,7 +511,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Add more photos section (clickable area)
         GestureDetector(
           onTap: () => _pickImages(setModalState),
           child: Container(
@@ -441,7 +546,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         ),
         const SizedBox(height: 16),
 
-        // Selected photos list
         Expanded(
           child: ListView.builder(
             itemCount: _selectedImages.length,
@@ -461,7 +565,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                 ),
                 child: Row(
                   children: [
-                    Icon(
+                    const Icon(
                       Icons.check_circle,
                       color: Colors.green,
                       size: 20,
@@ -575,44 +679,80 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         });
       }
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error selecting images: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _uploadPhotosToAPI(BuildContext context, String categoryId) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      // Get token from auth provider
+      // final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      // final token = authProvider.token;
+
+      // TODO: Replace with actual token
+      final token = 'YOUR_JWT_TOKEN_HERE';
+
+      final imagePaths = _selectedImages.map((img) => img.path).toList();
+      final tailorService = TailorService();
+
+      final result = await tailorService.uploadCategoryImages(
+        token,
+        categoryId,
+        imagePaths,
+      );
+
+      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context); // Close bottom sheet
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${_selectedImages.length} photo(s) uploaded successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        // Reload profile data to get updated images
+        _loadProfileData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: ${result['error']}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error selecting images: ${e.toString()}'),
+          content: Text('Error uploading images: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
       );
+    } finally {
+      _selectedImages.clear();
     }
-  }
-
-  void _addPhotosToGallery(BuildContext context) {
-    // Here you would typically upload the images to your server
-    // For now, we'll just simulate adding them to the local gallery data
-
-    // Convert XFile paths to network URLs (in real app, these would be server URLs)
-    final newImageUrls = _selectedImages.map((image) => image.path).toList();
-
-    // Add to gallery data structure
-    final gallery = profileData['gallery'][_currentUploadCategory] as Map<String, dynamic>;
-    final subcategory = gallery[_currentUploadSubcategory] as Map<String, dynamic>;
-    final currentImages = subcategory[_currentUploadItem] as List<dynamic>;
-
-    setState(() {
-      currentImages.addAll(newImageUrls);
-    });
-
-    Navigator.pop(context);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${_selectedImages.length} photo(s) added successfully!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-
-    // Clear selected images
-    _selectedImages.clear();
   }
 
   void _editProfile() {
@@ -627,7 +767,76 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    final businessProfile = profileData['businessProfile'];
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 60,
+                color: Colors.red,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                style: GoogleFonts.lato(
+                  fontSize: 16,
+                  color: Colors.red,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loadProfileData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+                child: Text(
+                  'Retry',
+                  style: GoogleFonts.lato(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_profileData == null || _categories.isEmpty) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF8F9FA),
+        body: Center(
+          child: Text(
+            'No profile data available',
+            style: GoogleFonts.lato(
+              fontSize: 16,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final businessProfile = _profileData!['businessProfile'];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -640,7 +849,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
               color: Colors.white,
               child: Column(
                 children: [
-                  // Top Row with back button and action buttons
+                  // Top Row
                   Row(
                     children: [
                       IconButton(
@@ -731,7 +940,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                             Row(
                               children: [
                                 Text(
-                                  businessProfile['rating'].toString(),
+                                  businessProfile['rating'].toStringAsFixed(1),
                                   style: GoogleFonts.lato(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -815,7 +1024,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              businessProfile['googleRating'].toString(),
+                              businessProfile['googleRating'].toStringAsFixed(1),
                               style: GoogleFonts.lato(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
@@ -897,11 +1106,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   Widget _buildServicesTab() {
     return Column(
       children: [
-        // Category Selection Cards
         _buildCategorySelector(),
-
         Expanded(
-          child: _buildServicesList(categories[_selectedCategoryIndex]['name'].toLowerCase()),
+          child: _buildServicesList(_categories[_selectedCategoryIndex]['gender']),
         ),
       ],
     );
@@ -913,7 +1120,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: categories.asMap().entries.map((entry) {
+        children: _categories.asMap().entries.map((entry) {
           final index = entry.key;
           final category = entry.value;
           final isSelected = _selectedCategoryIndex == index;
@@ -967,8 +1174,20 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildServicesList(String category) {
-    final services = profileData['services'][category] as List<dynamic>;
+  Widget _buildServicesList(String gender) {
+    final services = _profileData!['services'][gender] as List<dynamic>;
+
+    if (services.isEmpty) {
+      return Center(
+        child: Text(
+          'No services available',
+          style: GoogleFonts.lato(
+            fontSize: 16,
+            color: Colors.grey[600],
+          ),
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -1014,7 +1233,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                           image: DecorationImage(
-                            image: NetworkImage(item['image']),
+                            image: NetworkImage('https://tailorapp-uploads.s3.us-east-1.amazonaws.com/uploads/1759665077813-269001256.jpg'),
                             fit: BoxFit.cover,
                           ),
                         ),
@@ -1064,18 +1283,28 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   Widget _buildGalleryTab() {
     return Column(
       children: [
-        // Category Selection Cards (same as services)
         _buildCategorySelector(),
-
         Expanded(
-          child: _buildGalleryGrid(categories[_selectedCategoryIndex]['name'].toLowerCase()),
+          child: _buildGalleryGrid(_categories[_selectedCategoryIndex]['gender']),
         ),
       ],
     );
   }
 
-  Widget _buildGalleryGrid(String category) {
-    final gallery = profileData['gallery'][category] as Map<String, dynamic>;
+  Widget _buildGalleryGrid(String gender) {
+    final gallery = _profileData!['gallery'][gender] as Map<String, dynamic>;
+
+    if (gallery.isEmpty) {
+      return Center(
+        child: Text(
+          'No gallery images available',
+          style: GoogleFonts.lato(
+            fontSize: 16,
+            color: Colors.grey[600],
+          ),
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -1087,7 +1316,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
           return Column(
             children: items.entries.map((subEntry) {
               final itemName = subEntry.key;
-              final images = subEntry.value as List<dynamic>;
+              final itemData = subEntry.value as Map<String, dynamic>;
+              final images = itemData['images'] as List<dynamic>;
+              final categoryId = itemData['category_id'] as String;
+              final displayName = itemData['display_name'] as String;
+              final categoryDisplayName = itemData['category_display_name'] as String;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 24),
@@ -1097,19 +1330,23 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          '${subcategory.toUpperCase()} • ${itemName.toUpperCase()}',
-                          style: GoogleFonts.lato(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
+                        Expanded(
+                          child: Text(
+                            '${categoryDisplayName.toUpperCase()} • ${displayName.toUpperCase()}',
+                            style: GoogleFonts.lato(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => _showAddPhotosBottomSheet(
-                            categories[_selectedCategoryIndex]['name'].toLowerCase(),
-                            subcategory,
-                            itemName,
+                            categoryId,
+                            categoryDisplayName,
+                            displayName,
                           ),
                           child: Text(
                             'Add Photos',
@@ -1123,7 +1360,24 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                       ],
                     ),
                     const SizedBox(height: 12),
-                    GridView.builder(
+                    images.isEmpty
+                        ? Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'No images yet',
+                          style: GoogleFonts.lato(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ),
+                    )
+                        : GridView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -1160,7 +1414,30 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   }
 
   Widget _buildReviewsTab() {
-    final reviews = profileData['reviews'] as List<dynamic>;
+    final reviews = _profileData!['reviews'] as List<dynamic>;
+
+    if (reviews.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.rate_review_outlined,
+              size: 60,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No reviews yet',
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),

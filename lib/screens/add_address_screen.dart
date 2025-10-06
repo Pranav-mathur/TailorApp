@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../providers/global_provider.dart';
 
 class AddAddressScreen extends StatefulWidget {
   const AddAddressScreen({super.key});
@@ -9,76 +11,114 @@ class AddAddressScreen extends StatefulWidget {
 }
 
 class _AddAddressScreenState extends State<AddAddressScreen> {
-  final TextEditingController _buildingNameController = TextEditingController();
-  final TextEditingController _roadAreaController = TextEditingController();
-  final TextEditingController _streetCityController = TextEditingController();
+  // Controllers renamed logically
+  final TextEditingController _buildingController = TextEditingController();
+  final TextEditingController _streetController = TextEditingController();
+  final TextEditingController _cityController = TextEditingController();
+  final TextEditingController _stateController = TextEditingController();
+  final TextEditingController _pincodeController = TextEditingController();
+  final TextEditingController _mobileController = TextEditingController();
 
-  bool _isLoading = false;
-  String _locationName = '';
-  String _locationAddress = '';
+  bool _isSubmitting = false;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
+  void initState() {
+    super.initState();
+    _loadExistingAddress();
+  }
 
-    // Get the arguments passed from location picker
-    final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+  void _loadExistingAddress() {
+    final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+    final address = globalProvider.getAddress();
 
-    if (arguments != null) {
-      _locationName = arguments['locationName'] ?? 'SNN Raj Vista';
-      _locationAddress = arguments['locationAddress'] ?? 'Koramanagala, Bangalore';
-
-      // Pre-fill the form with default values
-      _buildingNameController.text = '';
-      _roadAreaController.text = '';
-      _streetCityController.text = '';
+    if (address != null) {
+      _buildingController.text = address['building'] ?? '';
+      _streetController.text = address['street'] ?? '';
+      _cityController.text = address['city'] ?? '';
+      _stateController.text = address['state'] ?? '';
+      _pincodeController.text = address['pincode'] ?? '';
+      _mobileController.text = address['mobile'] ?? '';
     }
   }
 
-  Future<void> _saveAddress() async {
-    // Validate form
-    if (_buildingNameController.text.trim().isEmpty ||
-        _roadAreaController.text.trim().isEmpty ||
-        _streetCityController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill in all address fields'),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+  Future<void> _handleSaveAddress() async {
+    // Validation
+    if (_buildingController.text.trim().isEmpty) {
+      _showSnackBar('Please enter building name', Colors.orange);
+      return;
+    }
+
+    if (_streetController.text.trim().isEmpty) {
+      _showSnackBar('Please enter street/area', Colors.orange);
+      return;
+    }
+
+    if (_cityController.text.trim().isEmpty) {
+      _showSnackBar('Please enter street and city', Colors.orange);
+      return;
+    }
+
+    if (_stateController.text.trim().isEmpty) {
+      _showSnackBar('Please enter state', Colors.orange);
+      return;
+    }
+
+    if (_pincodeController.text.trim().isEmpty) {
+      _showSnackBar('Please enter pincode', Colors.orange);
+      return;
+    }
+
+    if (_mobileController.text.trim().isEmpty) {
+      _showSnackBar('Please enter mobile number', Colors.orange);
+      return;
+    }
+
+    // Validate mobile number (10 digits)
+    if (_mobileController.text.trim().length != 10) {
+      _showSnackBar('Please enter a valid 10-digit mobile number', Colors.orange);
+      return;
+    }
+
+    // Validate pincode (6 digits)
+    if (_pincodeController.text.trim().length != 6) {
+      _showSnackBar('Please enter a valid 6-digit pincode', Colors.orange);
       return;
     }
 
     setState(() {
-      _isLoading = true;
+      _isSubmitting = true;
     });
 
-    // Simulate saving address
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+
+    // Save address to GlobalProvider
+    globalProvider.setAddress(
+      building: _buildingController.text.trim(),
+      street: _streetController.text.trim(),
+      city: _cityController.text.trim(),
+      state: _stateController.text.trim(),
+      pincode: _pincodeController.text.trim(),
+      mobile: _mobileController.text.trim(),
+    );
 
     setState(() {
-      _isLoading = false;
+      _isSubmitting = false;
     });
 
-    // Create the complete address object to pass back
-    final completeAddress = {
-      'locationName': _locationName,
-      'buildingName': _buildingNameController.text.trim(),
-      'roadArea': _roadAreaController.text.trim(),
-      'streetCity': _streetCityController.text.trim(),
-      'fullAddress': '${_buildingNameController.text.trim()}, ${_roadAreaController.text.trim()}, ${_streetCityController.text.trim()}',
-    };
+    _showSnackBar('Address saved successfully!', Colors.green);
 
-    // Navigate back to business details with the address
-    Navigator.of(context).popUntil((route) => route.settings.name == '/business');
+    // Navigate back with result
+    await Future.delayed(const Duration(milliseconds: 500));
+    Navigator.of(context).pop(true);
+  }
 
-    // Pass the address back to business details
-    // Note: You might want to use a state management solution for this in a real app
+  void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Address saved successfully!'),
-        backgroundColor: Colors.green,
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -108,52 +148,64 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
-
             // Location Icon
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey[300]!),
-              ),
-              child: const Icon(
-                Icons.location_on,
-                size: 40,
-                color: Colors.black,
+            Center(
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.location_on,
+                  size: 40,
+                  color: Colors.black,
+                ),
               ),
             ),
 
             const SizedBox(height: 40),
 
-            // Building Name
-            _buildInputField(
-              label: 'Building Name',
-              controller: _buildingNameController,
-              hintText: 'Enter building name',
-            ),
-
+            _buildLabel("Building Name"),
+            _buildTextField(controller: _buildingController, hintText: "Enter Building Name"),
             const SizedBox(height: 24),
 
-            // Road/Area
-            _buildInputField(
-              label: 'Road/Area',
-              controller: _roadAreaController,
-              hintText: 'Enter road or area',
-            ),
-
+            _buildLabel("Street/Area"),
+            _buildTextField(controller: _streetController, hintText: "Enter Street/Area"),
             const SizedBox(height: 24),
 
-            // Street and City
-            _buildInputField(
-              label: 'Street and City',
-              controller: _streetCityController,
-              hintText: 'Enter street and city',
-            ),
+            _buildLabel("City"),
+            _buildTextField(controller: _cityController, hintText: "Enter City"),
+            const SizedBox(height: 24),
 
+            _buildLabel("State"),
+            _buildTextField(controller: _stateController, hintText: "Enter State"),
+            const SizedBox(height: 24),
+
+            _buildLabel("Pincode"),
+            _buildTextField(
+              controller: _pincodeController,
+              hintText: "Enter Pincode",
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 24),
+
+            _buildLabel("Mobile Number"),
+            _buildTextField(
+              controller: _mobileController,
+              hintText: "Enter Mobile Number",
+              keyboardType: TextInputType.phone,
+            ),
             const SizedBox(height: 60),
 
             // Save Address Button
@@ -161,26 +213,26 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
               width: double.infinity,
               height: 55,
               decoration: BoxDecoration(
-                color: Colors.red.shade400,
-                borderRadius: BorderRadius.circular(25),
+                color: const Color(0xFFE57373),
+                borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.red.withOpacity(0.3),
+                    color: const Color(0xFFE57373).withOpacity(0.3),
                     blurRadius: 15,
                     offset: const Offset(0, 8),
                   ),
                 ],
               ),
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _saveAddress,
+                onPressed: _isSubmitting ? null : _handleSaveAddress,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
+                    borderRadius: BorderRadius.circular(15),
                   ),
                 ),
-                child: _isLoading
+                child: _isSubmitting
                     ? const SizedBox(
                   height: 20,
                   width: 20,
@@ -199,64 +251,64 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
                 ),
               ),
             ),
-
-            const SizedBox(height: 40),
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInputField({
-    required String label,
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.lato(
+        fontSize: 16,
+        fontWeight: FontWeight.w600,
+        color: Colors.black,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
     required TextEditingController controller,
     required String hintText,
+    TextInputType keyboardType = TextInputType.text,
   }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.lato(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        style: GoogleFonts.lato(
+          fontSize: 16,
+          color: Colors.black,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: GoogleFonts.lato(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black,
+            color: Colors.grey[400],
           ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.all(16),
         ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[300]!),
-          ),
-          child: TextField(
-            controller: controller,
-            style: GoogleFonts.lato(
-              fontSize: 16,
-              color: Colors.black,
-              fontWeight: FontWeight.w600,
-            ),
-            decoration: InputDecoration(
-              hintText: hintText,
-              hintStyle: GoogleFonts.lato(
-                fontSize: 16,
-                color: Colors.grey[400],
-              ),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.all(16),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
   @override
   void dispose() {
-    _buildingNameController.dispose();
-    _roadAreaController.dispose();
-    _streetCityController.dispose();
+    _buildingController.dispose();
+    _streetController.dispose();
+    _cityController.dispose();
+    _stateController.dispose();
+    _pincodeController.dispose();
+    _mobileController.dispose();
     super.dispose();
   }
 }

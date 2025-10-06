@@ -49,7 +49,7 @@ class GlobalProvider extends ChangeNotifier {
     required double price,
     String? delivery_time,
     List<String>? display_images,
-    String? category_name,
+    String? sub_category_name,
   }) {
     if (globalData['categories'] == null) {
       globalData['categories'] = <Map<String, dynamic>>[];
@@ -60,7 +60,7 @@ class GlobalProvider extends ChangeNotifier {
       'price': price,
       'delivery_time': delivery_time ?? '',
       'display_images': display_images ?? [],
-      'category_name': category_name ?? '',
+      'sub_category_name': sub_category_name ?? '',
     };
 
     (globalData['categories'] as List<Map<String, dynamic>>).add(category);
@@ -88,15 +88,35 @@ class GlobalProvider extends ChangeNotifier {
       if (price != null) categories[index]['price'] = price;
       if (deliveryTime != null) categories[index]['delivery_time'] = deliveryTime;
       if (displayImages != null) categories[index]['display_images'] = displayImages;
-      if (categoryName != null) categories[index]['category_name'] = categoryName;
+      if (categoryName != null) categories[index]['sub_category_name'] = categoryName;
       notifyListeners();
     }
   }
 
-  void setAddress(Map<String, dynamic> addressData) {
-    globalData['address'] = addressData;
+  // void setAddress(Map<String, dynamic> addressData) {
+  //   globalData['address'] = addressData;
+  //   notifyListeners();
+  //   debugPrint('Address saved to GlobalProvider: $addressData');
+  // }
+
+  // Address Methods
+  void setAddress({
+    required String building,
+    required String street,
+    required String city,
+    required String state,
+    required String pincode,
+    required String mobile,
+  }) {
+    globalData['address'] = {
+      'building': building,
+      'street': street,
+      'city': city,
+      'state': state,
+      'pincode': pincode,
+      'mobile': mobile,
+    };
     notifyListeners();
-    debugPrint('Address saved to GlobalProvider: $addressData');
   }
 
 // Get address data
@@ -104,40 +124,22 @@ class GlobalProvider extends ChangeNotifier {
     return globalData['address'] as Map<String, dynamic>?;
   }
 
-// Update specific address fields
-  void updateAddress({
-    String? locationName,
-    String? fullAddress,
-    double? latitude,
-    double? longitude,
-  }) {
-    Map<String, dynamic> currentAddress = getAddress() ?? {};
-
-    if (locationName != null) currentAddress['locationName'] = locationName;
-    if (fullAddress != null) currentAddress['fullAddress'] = fullAddress;
-    if (latitude != null) currentAddress['latitude'] = latitude;
-    if (longitude != null) currentAddress['longitude'] = longitude;
-
-    setAddress(currentAddress);
-  }
-
-  // Address Methods
-  // void setAddress({
-  //   required String street,
-  //   required String city,
-  //   required String state,
-  //   required String pincode,
-  //   required String mobile,
-  // }) {
-  //   globalData['address'] = {
-  //     'street': street,
-  //     'city': city,
-  //     'state': state,
-  //     'pincode': pincode,
-  //     'mobile': mobile,
-  //   };
-  //   notifyListeners();
-  // }
+// // Update specific address fields
+//   void updateAddress({
+//     String? locationName,
+//     String? fullAddress,
+//     double? latitude,
+//     double? longitude,
+//   }) {
+//     Map<String, dynamic> currentAddress = getAddress() ?? {};
+//
+//     if (locationName != null) currentAddress['locationName'] = locationName;
+//     if (fullAddress != null) currentAddress['fullAddress'] = fullAddress;
+//     if (latitude != null) currentAddress['latitude'] = latitude;
+//     if (longitude != null) currentAddress['longitude'] = longitude;
+//
+//     setAddress(currentAddress);
+//   }
 
   void updateAddressField(String field, String value) {
     if (globalData['address'] == null) {
@@ -306,5 +308,9 @@ class GlobalProvider extends ChangeNotifier {
       print('\nData Summary:');
       print(jsonEncode(getDataSummary()));
     }
+  }
+
+  Map<String, dynamic> getAllData() {
+    return globalData;
   }
 }

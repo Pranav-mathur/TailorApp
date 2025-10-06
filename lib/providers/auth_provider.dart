@@ -48,7 +48,7 @@ class AuthProvider with ChangeNotifier {
   }
 
   // Verify OTP and save token
-  Future<bool> verifyOtp(String mobileNumber, String otp) async {
+  Future<Map<String, dynamic>?> verifyOtp(String mobileNumber, String otp) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -69,12 +69,12 @@ class AuthProvider with ChangeNotifier {
 
       _isLoading = false;
       notifyListeners();
-      return true;
+      return result;
     } catch (e) {
       _error = e.toString();
       _isLoading = false;
       notifyListeners();
-      return false;
+      return {};
     }
   }
 

@@ -63,7 +63,12 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading = false;
         });
       } else {
+        Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+          '/login',
+              (route) => false,
+        );
         throw Exception(response['message'] ?? 'Failed to fetch bookings');
+
       }
 
     } catch (e) {

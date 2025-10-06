@@ -23,6 +23,9 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
   // Store image file names for each document type
   Map<String, String> documentFileNames = {};
 
+  // Track which specific document is currently uploading
+  String? _currentlyUploadingDocument;
+
   Future<void> _handleDocumentUpload(String documentType, String documentName) async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -33,6 +36,11 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
       );
 
       if (image != null) {
+        // Set this document as currently uploading
+        setState(() {
+          _currentlyUploadingDocument = documentType;
+        });
+
         final file = File(image.path);
 
         // Extract and store the image file name
@@ -44,10 +52,15 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         // Get token from AuthProvider
         final token = Provider.of<AuthProvider>(context, listen: false).token;
         if (token == null) {
+          setState(() {
+            _currentlyUploadingDocument = null;
+          });
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('User not logged in.'),
               backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
             ),
           );
           return;
@@ -59,7 +72,6 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
 
         // Get the uploaded URL from KycProvider
         final imageUrl = Provider.of<KycProvider>(context, listen: false).uploadedUrls[documentType];
-
         if (imageUrl != null) {
           // Save uploaded URL in GlobalProvider using specific methods
           final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
@@ -88,22 +100,34 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           debugPrint("🔗 URL: $imageUrl");
           debugPrint("💾 Saved to GlobalProvider successfully");
           debugPrint("===============================================");
-          debugPrint("$jsonEncode(globalData)");
         }
 
+        // Clear uploading state
+        setState(() {
+          _currentlyUploadingDocument = null;
+        });
+
+        // Show success snackbar for 2 seconds only
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$documentName uploaded successfully!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
           ),
         );
       } else {
+        // Clear uploading state if no image selected
+        setState(() {
+          _currentlyUploadingDocument = null;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('No image selected'),
             backgroundColor: Colors.orange,
             behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -111,6 +135,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
       // Remove the file name if upload failed
       setState(() {
         documentFileNames.remove(documentType);
+        _currentlyUploadingDocument = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -118,6 +143,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           content: Text('Upload failed: ${e.toString()}'),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -132,6 +158,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
           content: Text('Please upload all required documents'),
           backgroundColor: Colors.orange,
           behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 2),
         ),
       );
       return;
@@ -243,7 +270,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     final globalProvider = Provider.of<GlobalProvider>(context);
 
     bool isUploaded = kycProvider.uploadStatus[documentType] ?? false;
-    bool isUploading = kycProvider.isUploading;
+    bool isUploadingThisDocument = _currentlyUploadingDocument == documentType;
     String fileName = documentFileNames[documentType] ?? '';
 
     // Check if document exists in GlobalProvider as well
@@ -292,7 +319,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
               ),
             ),
             GestureDetector(
-              onTap: isUploading
+              onTap: isUploadingThisDocument
                   ? null
                   : () => _handleDocumentUpload(documentType, documentName),
               child: Container(
@@ -306,10 +333,13 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                     width: 2,
                   ),
                 ),
-                child: isUploading
-                    ? const CircularProgressIndicator(
-                  color: Colors.red,
-                  strokeWidth: 2,
+                child: isUploadingThisDocument
+                    ? Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: CircularProgressIndicator(
+                    color: Colors.red,
+                    strokeWidth: 2,
+                  ),
                 )
                     : Icon(
                   Icons.upload,
@@ -395,12 +425,21 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
               ),
             ),
             GestureDetector(
-              onTap: isUploading
+              onTap: isUploadingThisDocument
                   ? null
                   : () => _handleDocumentUpload(documentType, documentName),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: Row(
+                child: isUploadingThisDocument
+                    ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    color: Colors.red.shade400,
+                    strokeWidth: 2,
+                  ),
+                )
+                    : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
