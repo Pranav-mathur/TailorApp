@@ -98,7 +98,10 @@ class GlobalProvider extends ChangeNotifier {
   //   notifyListeners();
   //   debugPrint('Address saved to GlobalProvider: $addressData');
   // }
-
+  void clearCategories() {
+    setValue('categories', []);
+    debugPrint("=== CATEGORIES CLEARED ===");
+  }
   // Address Methods
   void setAddress({
     required String building,

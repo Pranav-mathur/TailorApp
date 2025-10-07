@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 import '../providers/auth_provider.dart';
 import '../providers/kyc_provider.dart';
 import '../services/tailor_service.dart';
+import 'edit_services_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
   const MyProfileScreen({super.key});
@@ -76,17 +77,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
 
     final categoriesMap = <String, Map<String, dynamic>>{};
 
+    // Dynamically build categories based on API response
     for (var category in apiData['categories']) {
       final gender = category['category_gender'] as String;
-      String categoryKey;
-
-      if (gender == 'men') {
-        categoryKey = 'Men';
-      } else if (gender == 'women') {
-        categoryKey = 'Women';
-      } else {
-        categoryKey = 'Unisex';
-      }
+      final categoryKey = _mapGenderToCategory(gender);
 
       if (!categoriesMap.containsKey(categoryKey)) {
         categoriesMap[categoryKey] = {
@@ -142,14 +136,45 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     });
   }
 
+  String _mapGenderToCategory(String gender) {
+    switch (gender.toLowerCase().trim()) {
+      case 'male':
+      case 'men':
+      case 'man':
+        return 'Men';
+      case 'female':
+      case 'women':
+      case 'woman':
+        return 'Women';
+      case 'kids':
+      case 'children':
+      case 'child':
+      case 'kid':
+        return 'Kids';
+      case 'unisex':
+        return 'Unisex';
+      case 'designer':
+      case 'designers':
+      case 'custom':
+        return 'Designers';
+      default:
+      // For any unknown gender, capitalize first letter and use as-is
+        return gender[0].toUpperCase() + gender.substring(1);
+    }
+  }
+
   String _getCategoryImage(String category) {
     switch (category) {
       case 'Men':
         return 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&q=80';
       case 'Women':
         return 'https://images.unsplash.com/photo-1494790108755-2616b332c3a2?w=200&q=80';
+      case 'Kids':
+        return 'https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?w=200&q=80';
       case 'Unisex':
         return 'https://images.unsplash.com/photo-1503944583220-79d8926ad5e2?w=200&q=80';
+      case 'Designers':
+        return 'https://images.unsplash.com/photo-1558769132-cb1aea3c74a3?w=200&q=80';
       default:
         return 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=200&q=80';
     }
@@ -161,10 +186,14 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         return const Color(0xFFE8F5E8);
       case 'Women':
         return const Color(0xFFFFF4E6);
+      case 'Kids':
+        return const Color(0xFFFFE0F0);
       case 'Unisex':
         return const Color(0xFFE3F2FD);
-      default:
+      case 'Designers':
         return const Color(0xFFF0E6FF);
+      default:
+        return const Color(0xFFF5F5F5);
     }
   }
 
@@ -186,11 +215,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   }
 
   Map<String, List<Map<String, dynamic>>> _transformServices(List<dynamic> categories) {
-    final services = <String, List<Map<String, dynamic>>>{
-      'men': [],
-      'women': [],
-      'unisex': [],
-    };
+    final services = <String, List<Map<String, dynamic>>>{};
+
+    // Dynamically create service maps based on unique genders in API
+    for (var category in categories) {
+      final gender = category['category_gender'] as String;
+      if (!services.containsKey(gender)) {
+        services[gender] = [];
+      }
+    }
 
     final groupedCategories = <String, Map<String, dynamic>>{};
 
@@ -228,24 +261,22 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         }).toList(),
       };
 
-      if (gender == 'men') {
-        services['men']!.add(serviceItem);
-      } else if (gender == 'women') {
-        services['women']!.add(serviceItem);
-      } else {
-        services['unisex']!.add(serviceItem);
-      }
+      services[gender]!.add(serviceItem);
     }
 
     return services;
   }
 
   Map<String, Map<String, Map<String, dynamic>>> _transformGallery(List<dynamic> categories) {
-    final gallery = <String, Map<String, Map<String, dynamic>>>{
-      'men': {},
-      'women': {},
-      'unisex': {},
-    };
+    final gallery = <String, Map<String, Map<String, dynamic>>>{};
+
+    // Dynamically create gallery maps based on unique genders in API
+    for (var category in categories) {
+      final gender = category['category_gender'] as String;
+      if (!gallery.containsKey(gender)) {
+        gallery[gender] = {};
+      }
+    }
 
     for (var category in categories) {
       final gender = category['category_gender'] as String;
@@ -260,22 +291,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       final images = List<String>.from(category['display_images']);
       final categoryId = category['category_id'] as String;
 
-      String genderKey = gender;
-      if (gender != 'men' && gender != 'women') {
-        genderKey = 'unisex';
+      if (!gallery[gender]!.containsKey(categoryName)) {
+        gallery[gender]![categoryName] = {};
       }
 
-      if (!gallery[genderKey]!.containsKey(categoryName)) {
-        gallery[genderKey]![categoryName] = {};
-      }
-
-      gallery[genderKey]![categoryName]![subcategoryName] = {
+      gallery[gender]![categoryName]![subcategoryName] = {
         'images': images,
         'category_id': categoryId,
         'display_name': category['sub_category_name'],
         'category_display_name': category['category_name'],
       };
     }
+
     print(gallery);
     return gallery;
   }
@@ -1004,9 +1031,9 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       String categoryDisplayName,
       String subcategoryDisplayName,
       ) {
-    setState(() {
-      _selectedImages.clear();
-    });
+    // Store uploaded images with their URLs
+    List<Map<String, String>> uploadedImages = [];
+    bool isUploadingImage = false;
 
     showModalBottomSheet(
       context: context,
@@ -1022,132 +1049,462 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
               topRight: Radius.circular(20),
             ),
           ),
-          child: Column(
-            children: [
-              Container(
-                margin: const EdgeInsets.only(top: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          categoryDisplayName.toUpperCase(),
-                          style: GoogleFonts.lato(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
-                        ),
-                        Text(
-                          ' • ${subcategoryDisplayName.toUpperCase()}',
-                          style: GoogleFonts.lato(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
                     Text(
-                      'Add Photos',
+                      categoryDisplayName.toUpperCase(),
                       style: GoogleFonts.lato(
-                        fontSize: 24,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.black,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Row(
+                    Text(
+                      ' • ${subcategoryDisplayName.toUpperCase()}',
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Add Photos',
+                  style: GoogleFonts.lato(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Upload Images Section
+                GestureDetector(
+                  onTap: isUploadingImage ? null : () async {
+                    try {
+                      // Single image selection
+                      final XFile? image = await _picker.pickImage(
+                        source: ImageSource.gallery,
+                        maxWidth: 1920,
+                        maxHeight: 1080,
+                        imageQuality: 85,
+                      );
+
+                      if (image != null) {
+                        setModalState(() {
+                          isUploadingImage = true;
+                        });
+
+                        final file = File(image.path);
+                        final fileName = path.basename(image.path);
+
+                        // Get token from AuthProvider
+                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                        final token = authProvider.token;
+
+                        if (token == null) {
+                          setModalState(() {
+                            isUploadingImage = false;
+                          });
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('User not logged in.'),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+
+                        // Upload document via KycProvider
+                        final documentType = 'gallery_${subcategoryDisplayName}_${DateTime.now().millisecondsSinceEpoch}';
+                        final kycProvider = Provider.of<KycProvider>(context, listen: false);
+                        await kycProvider.uploadDocument(file, documentType, token);
+
+                        // Get the uploaded URL from KycProvider
+                        final imageUrl = kycProvider.uploadedUrls[documentType];
+
+                        if (imageUrl != null) {
+                          setModalState(() {
+                            uploadedImages.add({
+                              'fileName': fileName,
+                              'url': imageUrl,
+                            });
+                            isUploadingImage = false;
+                          });
+
+                          debugPrint("=== 📸 GALLERY IMAGE UPLOADED ===");
+                          debugPrint("📄 File Name: $fileName");
+                          debugPrint("🔗 URL: $imageUrl");
+                          debugPrint("💾 Total Images: ${uploadedImages.length}");
+                          debugPrint("=================================");
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Image uploaded successfully!'),
+                              backgroundColor: Colors.green,
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        } else {
+                          setModalState(() {
+                            isUploadingImage = false;
+                          });
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Upload failed - no URL returned'),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      setModalState(() {
+                        isUploadingImage = false;
+                      });
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error uploading image: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Upload Photo(s)',
+                          'Upload Display Image',
                           style: GoogleFonts.lato(
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black,
+                            fontWeight: FontWeight.w500,
+                            color: isUploadingImage ? Colors.grey[400] : Colors.black,
                           ),
                         ),
-                        const Spacer(),
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          width: 32,
+                          height: 32,
                           decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(8),
+                            color: Colors.red.shade50,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.red.shade300,
+                              width: 2,
+                            ),
                           ),
-                          child: const Icon(
-                            Icons.cloud_upload_outlined,
-                            color: Colors.red,
-                            size: 20,
+                          child: isUploadingImage
+                              ? Padding(
+                            padding: const EdgeInsets.all(6.0),
+                            child: CircularProgressIndicator(
+                              color: Colors.red,
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : Icon(
+                            Icons.upload,
+                            color: Colors.red.shade400,
+                            size: 16,
                           ),
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
 
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: _selectedImages.isEmpty
-                            ? _buildPhotoPlaceholder(setModalState)
-                            : _buildPhotoGrid(setModalState),
+                // Uploaded Images List
+                if (uploadedImages.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  ...uploadedImages.asMap().entries.map((entry) {
+                    int index = entry.key;
+                    String fileName = entry.value['fileName'] ?? '';
+                    String imageUrl = entry.value['url'] ?? '';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green),
                       ),
-
-                      Container(
-                        width: double.infinity,
-                        height: 50,
-                        margin: const EdgeInsets.only(bottom: 20, top: 20),
-                        child: ElevatedButton(
-                          onPressed: _selectedImages.isNotEmpty
-                              ? () => _uploadPhotosToAPI(context, categoryId)
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _selectedImages.isNotEmpty
-                                ? Colors.red
-                                : Colors.grey[300],
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 20,
+                            height: 20,
+                            decoration: const BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 14,
                             ),
                           ),
-                          child: Text(
-                            'Add Photo',
-                            style: GoogleFonts.lato(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: _selectedImages.isNotEmpty
-                                  ? Colors.white
-                                  : Colors.grey[600],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  fileName,
+                                  style: GoogleFonts.lato(
+                                    fontSize: 14,
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.cloud_done,
+                                      size: 12,
+                                      color: Colors.blue[600],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Uploaded',
+                                      style: GoogleFonts.lato(
+                                        fontSize: 11,
+                                        color: Colors.blue[600],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _viewImageDialog(fileName, imageUrl),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              child: Text(
+                                'View',
+                                style: GoogleFonts.lato(
+                                  fontSize: 12,
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setModalState(() {
+                                uploadedImages.removeAt(index);
+                              });
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Image removed'),
+                                  backgroundColor: Colors.orange,
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              child: Text(
+                                'Remove',
+                                style: GoogleFonts.lato(
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+
+                const SizedBox(height: 16),
+
+                // Helper text
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[100]!),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.blue[700],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You can upload multiple images one at a time',
+                          style: GoogleFonts.lato(
+                            fontSize: 12,
+                            color: Colors.blue[700],
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 40),
+
+                // Add Photos Button
+                Container(
+                  width: double.infinity,
+                  height: 55,
+                  decoration: BoxDecoration(
+                    color: uploadedImages.isNotEmpty ? Colors.red.shade400 : Colors.grey[300],
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: uploadedImages.isNotEmpty
+                        ? () => _addPhotosToGallery(context, categoryId, uploadedImages)
+                        : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: Text(
+                      'Add Photos',
+                      style: GoogleFonts.lato(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: uploadedImages.isNotEmpty ? Colors.white : Colors.grey[600],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  Future<void> _addPhotosToGallery(
+      BuildContext context,
+      String categoryId,
+      List<Map<String, String>> uploadedImages,
+      ) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final tailorService = TailorService();
+
+      // Extract URLs from uploaded images
+      final newImageUrls = uploadedImages.map((img) => img['url']!).toList();
+
+      // Find the category in _apiData and get existing images
+      final allCategories = List<Map<String, dynamic>>.from(_apiData!['categories']);
+      final categoryIndex = allCategories.indexWhere(
+            (cat) => cat['category_id'] == categoryId,
+      );
+
+      if (categoryIndex == -1) {
+        throw Exception('Category not found');
+      }
+
+      // Get existing images and add new ones
+      final existingImages = List<String>.from(allCategories[categoryIndex]['display_images'] ?? []);
+      final updatedImages = [...existingImages, ...newImageUrls];
+
+      // Update the category with new images
+      allCategories[categoryIndex]['display_images'] = updatedImages;
+
+      // Call update API
+      final body = {
+        'categories': allCategories,
+      };
+
+      final result = await tailorService.updateTailorProfile(
+        token: authProvider.token ?? '',
+        body: body,
+      );
+
+      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context); // Close bottom sheet
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${uploadedImages.length} photo(s) added successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        // Reload profile data
+        _loadProfileData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Update failed: ${result['message']}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context); // Close bottom sheet
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error adding photos: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
   Widget _buildPhotoPlaceholder(StateSetter setModalState) {
     return GestureDetector(
       onTap: () => _pickImages(setModalState),
@@ -1736,37 +2093,53 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
           ],
         ),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(20),
-        child: Container(
-          width: double.infinity,
-          height: 55,
-          decoration: BoxDecoration(
-            color: Colors.red,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: ElevatedButton(
-            onPressed: () {
-              Navigator.pushNamed(context, '/services');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15),
-              ),
+        bottomNavigationBar: Container(
+          padding: const EdgeInsets.all(20),
+          child: Container(
+            width: double.infinity,
+            height: 55,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.circular(15),
             ),
-            child: Text(
-              'Edit Services',
-              style: GoogleFonts.lato(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            child: ElevatedButton(
+              // onPressed: () async {
+              //   // Navigate to EditServicesScreen and wait for result
+              //   final result = await Navigator.push(
+              //     context,
+              //     MaterialPageRoute(
+              //       builder: (context) => EditServicesScreen(
+              //         profileData: _profileData!,
+              //         apiData: _apiData!,
+              //       ),
+              //     ),
+              //   );
+              //
+              //   // If result is true, reload the profile
+              //   if (result == true) {
+              //     _loadProfileData();
+              //   }
+              // },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shadowColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              onPressed: () {  },
+              child: Text(
+                'Edit Services',
+                style: GoogleFonts.lato(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
         ),
-      ),
+
     );
   }
 
@@ -2002,7 +2375,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                           child: Text(
                             '${categoryDisplayName.toUpperCase()} • ${displayName.toUpperCase()}',
                             style: GoogleFonts.lato(
-                              fontSize: 16,
+                              fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: Colors.black,
                             ),
