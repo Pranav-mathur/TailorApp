@@ -1050,14 +1050,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         Navigator.pushNamed(context, '/bank-details');
                       },
                     ),
-                    _buildMenuItem(
-                      icon: Icons.star_outline,
-                      title: 'Upgrade Profile',
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.pushNamed(context, '/upgrade-profile');
-                      },
-                    ),
                     const SizedBox(height: 32),
                     Text(
                       'Settings & Support',

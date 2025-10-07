@@ -32,115 +32,58 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A1A), // Dark brown/black background
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Logo container with circular background
-            Container(
-              width: 120,
-              height: 120,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF5E6E0), // Light pink/cream background
-                shape: BoxShape.circle,
-              ),
-              child: Center(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // Needle illustration
-                    Transform.rotate(
-                      angle: -0.5, // Slight rotation for the needle
-                      child: Container(
-                        width: 60,
-                        height: 2,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B4513), // Brown color for needle
-                          borderRadius: BorderRadius.circular(1),
-                        ),
-                      ),
-                    ),
-                    // Thread curve (simplified as a small circle)
-                    Positioned(
-                      top: 35,
-                      left: 45,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF8B4513),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    // Needle eye
-                    Positioned(
-                      top: 52,
-                      right: 35,
-                      child: Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A1A1A),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF8B4513),
-                            width: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+      backgroundColor: const Color(0xFF1E1006),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.center,
+            radius: 1.0,
+            colors: [Color(0xFF2A1A0C), Color(0xFF1E1006)],
+          ),
+        ),
+        child: SafeArea(
+          child: SizedBox(
+            width: double.infinity,
+            height: double.infinity,
+            child: Column(
+              children: [
+                // Top spacer - takes up specific portion of screen
+                SizedBox(height: screenHeight * 0.5),
+
+                // App Logo Asset - fixed size relative to screen
+                Image.asset(
+                  'assets/images/AppIcon.png',
+                  width: screenHeight * 0.2, // 20% of screen height
+                  height: screenHeight * 0.2,
                 ),
-              ),
-            ),
 
-            const SizedBox(height: 40),
-
-            // Brand name
-            const Text(
-              'CASA DARZI',
-              style: TextStyle(
-                color: Color(0xFFF5E6E0), // Light cream color
-                fontSize: 28,
-                fontWeight: FontWeight.w300,
-                letterSpacing: 8.0,
-                fontFamily: 'serif', // You can change this to a custom font
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
-            // Tagline
-            const Text(
-              'WHERE STYLE COMES HOME',
-              style: TextStyle(
-                color: Color(0xFFB8A898), // Slightly darker cream
-                fontSize: 12,
-                fontWeight: FontWeight.w300,
-                letterSpacing: 2.0,
-                fontFamily: 'serif', // You can change this to a custom font
-              ),
-            ),
-
-            const SizedBox(height: 80),
-
-            // Loading indicator
-            const SizedBox(
-              width: 30,
-              height: 30,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Color(0xFFF5E6E0), // Light cream color
+                // Fixed spacing between logo and loader
+                SizedBox(height: screenHeight * 0.08), // 8% of screen height
+                // Loading indicator - fixed size
+                SizedBox(
+                  width:
+                  screenHeight *
+                      0.045, // Approx 18 logical pixels relative to screen height
+                  height: screenHeight * 0.045,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.0,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Colors.white.withOpacity(0.8),
+                    ),
+                  ),
                 ),
-              ),
+
+                // Bottom spacer - takes remaining space
+                const Expanded(child: SizedBox()),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+
 }

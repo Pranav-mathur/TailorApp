@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:tailor_app/razorPayPayment.dart';
 
 class UpgradeProfileScreen extends StatelessWidget {
   const UpgradeProfileScreen({super.key});
@@ -77,10 +78,7 @@ class UpgradeProfileScreen extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.brown.shade700,
-                      Colors.brown.shade600,
-                    ],
+                    colors: [Colors.brown.shade700, Colors.brown.shade600],
                   ),
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
@@ -127,7 +125,8 @@ class UpgradeProfileScreen extends StatelessWidget {
                           _buildBenefitItem(
                             emoji: '📈',
                             title: 'Increased Visibility',
-                            description: 'Increase your visibility on our homepage and in search results.',
+                            description:
+                            'Increase your visibility on our homepage and in search results.',
                           ),
                           const SizedBox(height: 24),
 
@@ -135,7 +134,8 @@ class UpgradeProfileScreen extends StatelessWidget {
                           _buildBenefitItem(
                             emoji: '💰',
                             title: 'More Orders & Higher Revenue',
-                            description: 'Drive more customer inquiries and increase your earnings.',
+                            description:
+                            'Drive more customer inquiries and increase your earnings.',
                           ),
                           const SizedBox(height: 24),
 
@@ -143,7 +143,8 @@ class UpgradeProfileScreen extends StatelessWidget {
                           _buildBenefitItem(
                             emoji: '🏆',
                             title: 'Enhanced Credibility',
-                            description: 'Build a stronger, more professional brand reputation.',
+                            description:
+                            'Build a stronger, more professional brand reputation.',
                           ),
                         ],
                       ),
@@ -156,10 +157,7 @@ class UpgradeProfileScreen extends StatelessWidget {
                       height: 56,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          colors: [
-                            Colors.red.shade400,
-                            Colors.red.shade500,
-                          ],
+                          colors: [Colors.red.shade400, Colors.red.shade500],
                         ),
                         borderRadius: BorderRadius.circular(28),
                         boxShadow: [
@@ -248,10 +246,7 @@ class UpgradeProfileScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Center(
-            child: Text(
-              emoji,
-              style: const TextStyle(fontSize: 24),
-            ),
+            child: Text(emoji, style: const TextStyle(fontSize: 24)),
           ),
         ),
         const SizedBox(width: 16),
@@ -287,14 +282,10 @@ class UpgradeProfileScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           'Confirm Upgrade',
-          style: GoogleFonts.lato(
-            fontWeight: FontWeight.bold,
-          ),
+          style: GoogleFonts.lato(fontWeight: FontWeight.bold),
         ),
         content: Text(
           'Are you sure you want to upgrade to the premium plan for ₹199/month?',
@@ -307,23 +298,17 @@ class UpgradeProfileScreen extends StatelessWidget {
             },
             child: Text(
               'Cancel',
-              style: GoogleFonts.lato(
-                color: Colors.grey[600],
-              ),
+              style: GoogleFonts.lato(color: Colors.grey[600]),
             ),
           ),
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
               // Add upgrade logic here
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Upgrade successful!',
-                    style: GoogleFonts.lato(),
-                  ),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => RazorpayPaymentPage(amount: 199.0),
                 ),
               );
             },
