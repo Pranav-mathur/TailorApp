@@ -3,7 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
+import 'package:path/path.dart' as path;
 import '../providers/auth_provider.dart';
+import '../providers/kyc_provider.dart';
 import '../services/tailor_service.dart';
 
 class MyProfileScreen extends StatefulWidget {
@@ -45,11 +47,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     });
 
     try {
-      // Get token from your Auth Provider
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
       final tailorService = TailorService();
-      // Call the API
       final result = await tailorService.getTailorProfile(token: authProvider.token ?? "",);
       print(result);
 
@@ -75,7 +74,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   void _processApiData(Map<String, dynamic> apiData) {
     _apiData = apiData;
 
-    // Extract unique categories based on gender
     final categoriesMap = <String, Map<String, dynamic>>{};
 
     for (var category in apiData['categories']) {
@@ -87,7 +85,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       } else if (gender == 'women') {
         categoryKey = 'Women';
       } else {
-        categoryKey = 'Unisex'; // or 'Kids' based on your logic
+        categoryKey = 'Unisex';
       }
 
       if (!categoriesMap.containsKey(categoryKey)) {
@@ -100,7 +98,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       }
     }
 
-    // Get delivery times and calculate average
     final deliveryTimes = apiData['categories']
         .map((c) => c['delivery_time'] as String)
         .toList();
@@ -108,7 +105,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         ? deliveryTimes.first
         : '3-5 days';
 
-    // Get minimum price
     final prices = apiData['categories']
         .map((c) => c['price'] as int)
         .toList();
@@ -116,7 +112,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         ? prices.reduce((a, b) => a < b ? a : b)
         : 0;
 
-    // Transform API data to component structure
     final transformedData = {
       'businessProfile': {
         'name': apiData['name'] ?? 'Tailor',
@@ -135,7 +130,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       },
       'services': _transformServices(apiData['categories']),
       'gallery': _transformGallery(apiData['categories']),
-      'reviews': [], // Reviews would come from a separate API call if needed
+      'reviews': [],
     };
 
     setState(() {
@@ -197,7 +192,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       'unisex': [],
     };
 
-    // Group by category_name and gender - explicitly type the map
     final groupedCategories = <String, Map<String, dynamic>>{};
 
     for (var category in categories) {
@@ -215,7 +209,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       (groupedCategories[key]!['items'] as List).add(category);
     }
 
-    // Transform grouped categories into service items
     for (var entry in groupedCategories.values) {
       final gender = entry['gender'] as String;
       final categoryName = entry['category_name'] as String;
@@ -231,6 +224,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
               : 'https://via.placeholder.com/300',
           'deliveryTime': item['delivery_time'],
           'category_id': item['category_id'],
+          'categoryData': item,
         }).toList(),
       };
 
@@ -309,6 +303,702 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     );
   }
 
+  void _showEditServiceBottomSheet(Map<String, dynamic> categoryData) {
+    final priceController = TextEditingController(text: categoryData['price'].toString());
+    final deliveryTimeController = TextEditingController(text: categoryData['delivery_time']);
+
+    // Store uploaded images with their URLs (from existing + newly uploaded)
+    List<Map<String, String>> uploadedImages = [];
+
+    // Pre-populate with existing images
+    final existingImageUrls = List<String>.from(categoryData['display_images'] ?? []);
+    uploadedImages = existingImageUrls.map((url) {
+      final fileName = url.split('/').last;
+      return {
+        'fileName': fileName,
+        'url': url,
+      };
+    }).toList();
+
+    bool isUploadingImage = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.8,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Text(
+                      'Service Details',
+                      style: GoogleFonts.lato(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    Text(
+                      ' • ${categoryData['sub_category_name']}',
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // Price Field
+                Text(
+                  'Price *',
+                  style: GoogleFonts.lato(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: TextField(
+                    controller: priceController,
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Enter the price',
+                      hintStyle: GoogleFonts.lato(
+                        color: Colors.grey[400],
+                        fontSize: 16,
+                      ),
+                      prefixText: '₹ ',
+                      prefixStyle: GoogleFonts.lato(
+                        fontSize: 16,
+                        color: Colors.black,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Delivery Time Field
+                Text(
+                  'Delivery Time',
+                  style: GoogleFonts.lato(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: TextField(
+                    controller: deliveryTimeController,
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'e.g., 3-5 days',
+                      hintStyle: GoogleFonts.lato(
+                        color: Colors.grey[400],
+                        fontSize: 16,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.all(16),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Display Images
+                Text(
+                  'Display Images',
+                  style: GoogleFonts.lato(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Upload Images Section
+                GestureDetector(
+                  onTap: isUploadingImage ? null : () async {
+                    try {
+                      // Single image selection
+                      final XFile? image = await _picker.pickImage(
+                        source: ImageSource.gallery,
+                        maxWidth: 1920,
+                        maxHeight: 1080,
+                        imageQuality: 85,
+                      );
+
+                      if (image != null) {
+                        setModalState(() {
+                          isUploadingImage = true;
+                        });
+
+                        final file = File(image.path);
+                        final fileName = path.basename(image.path);
+
+                        // Get token from AuthProvider
+                        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                        final token = authProvider.token;
+
+                        if (token == null) {
+                          setModalState(() {
+                            isUploadingImage = false;
+                          });
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('User not logged in.'),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+
+                        // Upload document via KycProvider
+                        final documentType = 'service_${categoryData['sub_category_name']}_${DateTime.now().millisecondsSinceEpoch}';
+                        final kycProvider = Provider.of<KycProvider>(context, listen: false);
+                        await kycProvider.uploadDocument(file, documentType, token);
+
+                        // Get the uploaded URL from KycProvider
+                        final imageUrl = kycProvider.uploadedUrls[documentType];
+
+                        if (imageUrl != null) {
+                          setModalState(() {
+                            uploadedImages.add({
+                              'fileName': fileName,
+                              'url': imageUrl,
+                            });
+                            isUploadingImage = false;
+                          });
+
+                          debugPrint("=== 📸 SERVICE IMAGE UPLOADED ===");
+                          debugPrint("📄 File Name: $fileName");
+                          debugPrint("🔗 URL: $imageUrl");
+                          debugPrint("💾 Total Images: ${uploadedImages.length}");
+                          debugPrint("=================================");
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Image uploaded successfully!'),
+                              backgroundColor: Colors.green,
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        } else {
+                          setModalState(() {
+                            isUploadingImage = false;
+                          });
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Upload failed - no URL returned'),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      }
+                    } catch (e) {
+                      setModalState(() {
+                        isUploadingImage = false;
+                      });
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error uploading image: ${e.toString()}'),
+                          backgroundColor: Colors.red,
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey[300]!),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Upload Display Image',
+                          style: GoogleFonts.lato(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: isUploadingImage ? Colors.grey[400] : Colors.black,
+                          ),
+                        ),
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.red.shade300,
+                              width: 2,
+                            ),
+                          ),
+                          child: isUploadingImage
+                              ? Padding(
+                            padding: const EdgeInsets.all(6.0),
+                            child: CircularProgressIndicator(
+                              color: Colors.red,
+                              strokeWidth: 2,
+                            ),
+                          )
+                              : Icon(
+                            Icons.upload,
+                            color: Colors.red.shade400,
+                            size: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Uploaded Images List
+                if (uploadedImages.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  ...uploadedImages.asMap().entries.map((entry) {
+                    int index = entry.key;
+                    String fileName = entry.value['fileName'] ?? '';
+                    String imageUrl = entry.value['url'] ?? '';
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 20,
+                            height: 20,
+                            decoration: const BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  fileName,
+                                  style: GoogleFonts.lato(
+                                    fontSize: 14,
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.cloud_done,
+                                      size: 12,
+                                      color: Colors.blue[600],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Uploaded',
+                                      style: GoogleFonts.lato(
+                                        fontSize: 11,
+                                        color: Colors.blue[600],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _viewImageDialog(fileName, imageUrl),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              child: Text(
+                                'View',
+                                style: GoogleFonts.lato(
+                                  fontSize: 12,
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setModalState(() {
+                                uploadedImages.removeAt(index);
+                              });
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Image removed'),
+                                  backgroundColor: Colors.orange,
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              child: Text(
+                                'Remove',
+                                style: GoogleFonts.lato(
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+
+                const SizedBox(height: 16),
+
+                // Helper text
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[100]!),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.blue[700],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You can upload multiple images one at a time',
+                          style: GoogleFonts.lato(
+                            fontSize: 12,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+
+                // Save Changes Button
+                Container(
+                  width: double.infinity,
+                  height: 55,
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade400,
+                    borderRadius: BorderRadius.circular(25),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () => _updateServiceWithUploadedImages(
+                      context,
+                      categoryData,
+                      priceController.text,
+                      deliveryTimeController.text,
+                      uploadedImages,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                    ),
+                    child: Text(
+                      'Save Changes',
+                      style: GoogleFonts.lato(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _viewImageDialog(String fileName, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Image Preview',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Image preview
+              Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxHeight: 400),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        padding: const EdgeInsets.all(40),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image, size: 50, color: Colors.grey[400]),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Unable to load image',
+                              style: GoogleFonts.lato(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        padding: const EdgeInsets.all(60),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                                : null,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // File name
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Text(
+                  fileName,
+                  style: GoogleFonts.lato(
+                    fontSize: 12,
+                    color: Colors.grey[700],
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _updateServiceWithUploadedImages(
+      BuildContext context,
+      Map<String, dynamic> categoryData,
+      String price,
+      String deliveryTime,
+      List<Map<String, String>> uploadedImages,
+      ) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final tailorService = TailorService();
+
+      // Extract URLs from uploaded images
+      final imageUrls = uploadedImages.map((img) => img['url']!).toList();
+
+      // Prepare updated category data
+      final updatedCategory = {
+        'category_id': categoryData['category_id'],
+        'category_name': categoryData['category_name'],
+        'category_gender': categoryData['category_gender'],
+        'sub_category_name': categoryData['sub_category_name'],
+        'price': int.parse(price),
+        'delivery_time': deliveryTime,
+        'display_images': imageUrls,
+        'is_valid_sub_category': categoryData['is_valid_sub_category'] ?? true,
+      };
+
+      // Get all categories from API data and update the specific one
+      final allCategories = List<Map<String, dynamic>>.from(_apiData!['categories']);
+      final categoryIndex = allCategories.indexWhere(
+            (cat) => cat['category_id'] == categoryData['category_id'],
+      );
+
+      if (categoryIndex != -1) {
+        allCategories[categoryIndex] = updatedCategory;
+      }
+
+      // Call update API
+      final body = {
+        'categories': allCategories,
+      };
+
+      final result = await tailorService.updateTailorProfile(
+        token: authProvider.token ?? '',
+        body: body,
+      );
+
+      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context); // Close bottom sheet
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Service updated successfully!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        // Reload profile data
+        _loadProfileData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Update failed: ${result['message']}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context); // Close bottom sheet
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating service: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   void _showAddPhotosBottomSheet(
       String categoryId,
       String categoryDisplayName,
@@ -334,7 +1024,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
           ),
           child: Column(
             children: [
-              // Handle bar
               Container(
                 margin: const EdgeInsets.only(top: 12),
                 width: 40,
@@ -345,7 +1034,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                 ),
               ),
 
-              // Header
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -410,7 +1098,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                 ),
               ),
 
-              // Photo selection area
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -422,7 +1109,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                             : _buildPhotoGrid(setModalState),
                       ),
 
-                      // Add Photo Button
                       Container(
                         width: double.infinity,
                         height: 50,
@@ -692,7 +1378,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
   }
 
   Future<void> _uploadPhotosToAPI(BuildContext context, String categoryId) async {
-    // Show loading
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -702,24 +1387,18 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
     );
 
     try {
-      // Get token from auth provider
-      // final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      // final token = authProvider.token;
-
-      // TODO: Replace with actual token
-      final token = 'YOUR_JWT_TOKEN_HERE';
-
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
       final imagePaths = _selectedImages.map((img) => img.path).toList();
       final tailorService = TailorService();
 
       final result = await tailorService.uploadCategoryImages(
-        token,
+        authProvider.token ?? '',
         categoryId,
         imagePaths,
       );
 
-      Navigator.pop(context); // Close loading dialog
-      Navigator.pop(context); // Close bottom sheet
+      Navigator.pop(context);
+      Navigator.pop(context);
 
       if (result['success']) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -730,7 +1409,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
           ),
         );
 
-        // Reload profile data to get updated images
         _loadProfileData();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -742,7 +1420,7 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
         );
       }
     } catch (e) {
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error uploading images: ${e.toString()}'),
@@ -843,13 +1521,11 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       body: SafeArea(
         child: Column(
           children: [
-            // Header Section
             Container(
               padding: const EdgeInsets.all(20),
               color: Colors.white,
               child: Column(
                 children: [
-                  // Top Row
                   Row(
                     children: [
                       IconButton(
@@ -857,7 +1533,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         onPressed: () => Navigator.of(context).pop(),
                       ),
                       const Spacer(),
-                      // Edit Button
                       GestureDetector(
                         onTap: _editProfile,
                         child: Container(
@@ -879,7 +1554,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // Online/Offline Toggle
                       GestureDetector(
                         onTap: _toggleOnlineStatus,
                         child: Container(
@@ -905,10 +1579,8 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
 
                   const SizedBox(height: 20),
 
-                  // Business Info Row
                   Row(
                     children: [
-                      // Business Logo
                       Container(
                         width: 80,
                         height: 80,
@@ -923,7 +1595,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
 
                       const SizedBox(width: 16),
 
-                      // Business Details
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -972,7 +1643,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
 
                   const SizedBox(height: 16),
 
-                  // Service Info Row
                   Row(
                     children: [
                       Row(
@@ -1002,7 +1672,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                         ],
                       ),
                       const Spacer(),
-                      // Google Rating
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -1039,7 +1708,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
               ),
             ),
 
-            // Tab Bar
             Container(
               color: Colors.white,
               child: TabBar(
@@ -1055,7 +1723,6 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
               ),
             ),
 
-            // Tab Content
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -1261,12 +1928,15 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
                           ],
                         ),
                       ),
-                      Text(
-                        'Edit Details',
-                        style: GoogleFonts.lato(
-                          fontSize: 12,
-                          color: Colors.red,
-                          fontWeight: FontWeight.w500,
+                      GestureDetector(
+                        onTap: () => _showEditServiceBottomSheet(item['categoryData']),
+                        child: Text(
+                          'Edit Details',
+                          style: GoogleFonts.lato(
+                            fontSize: 12,
+                            color: Colors.red,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
@@ -1310,12 +1980,10 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
       padding: const EdgeInsets.all(20),
       child: Column(
         children: gallery.entries.map((categoryEntry) {
-          final categoryKey = categoryEntry.key; // e.g., 'mens_blazers'
           final subcategories = categoryEntry.value as Map<String, dynamic>;
 
           return Column(
             children: subcategories.entries.map((subEntry) {
-              final subcategoryKey = subEntry.key; // e.g., 'formal_blazers'
               final itemData = subEntry.value as Map<String, dynamic>;
               final images = itemData['images'] as List<dynamic>;
               final categoryId = itemData['category_id'] as String;

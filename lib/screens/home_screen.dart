@@ -92,17 +92,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Process API response and organize data
   void _processBookingsData(Map<String, dynamic> responseData) {
+    // Extract tailor details from root level
+    final tailorDetails = responseData['tailor_details'] as Map<String, dynamic>? ?? {};
+
+    // Extract bookings data
     final bookingsData = responseData['data'] as List<dynamic>? ?? [];
     final pagination = responseData['pagination'] as Map<String, dynamic>? ?? {};
 
     // Convert to list of maps for easier processing
     allBookings = bookingsData.map((booking) => booking as Map<String, dynamic>).toList();
-
-    // Get tailor details from first booking (if available)
-    Map<String, dynamic>? tailorDetails;
-    if (allBookings.isNotEmpty && allBookings[0]['tailor_details'] != null) {
-      tailorDetails = allBookings[0]['tailor_details'] as Map<String, dynamic>;
-    }
 
     // Filter out completed and cancelled orders for main display
     final activeBookings = allBookings.where((booking) {
@@ -123,8 +121,10 @@ class _HomeScreenState extends State<HomeScreen> {
     // Create home data structure
     homeData = {
       "businessInfo": {
-        "name": tailorDetails?['name'] ?? 'Your Business',
-        "logo": tailorDetails?['profile_pic'] ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80',
+        "name": tailorDetails['name'] ?? 'Your Business',
+        "logo": tailorDetails['profile_pic'] ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80',
+        "mobile": tailorDetails['mobile'] ?? '',
+        "address": tailorDetails['address'] ?? {},
         "boostPromo": {
           "title": "Boost Your Business",
           "subtitle": "Get a featured spot",
