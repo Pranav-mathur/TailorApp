@@ -18,11 +18,11 @@ class OtpVerificationScreen extends StatefulWidget {
 
 class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final List<TextEditingController> _otpControllers = List.generate(
-    4,
+    6,
         (index) => TextEditingController(),
   );
   final List<FocusNode> _focusNodes = List.generate(
-    4,
+    6,
         (index) => FocusNode(),
   );
 
@@ -44,12 +44,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   Future<void> _handleVerifyOtp() async {
     final otp = _otpCode;
 
-    if (otp.length != 4) {
-      _showErrorSnackBar('Please enter the complete 4-digit OTP');
+    if (otp.length != 6) {
+      _showErrorSnackBar('Please enter the complete 6-digit OTP');
       return;
     }
 
-    // Get phone number from arguments
     final String phoneNumber = ModalRoute.of(context)!.settings.arguments as String;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -61,7 +60,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       if (success["is_new_user"] == true) {
         Navigator.pushNamedAndRemoveUntil(
           context,
-          '/kyc',
+          '/profile-details',
               (route) => false,
         );
       } else {
@@ -78,7 +77,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   Future<void> _handleResendOtp() async {
-    // Get phone number from arguments
     final String phoneNumber = widget.phoneNumber ??
         ModalRoute.of(context)?.settings.arguments as String? ??
         '';
@@ -124,21 +122,20 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   }
 
   void _onOtpChanged(String value, int index) {
-    if (value.isNotEmpty && index < 3) {
+    if (value.isNotEmpty && index < 5) {
       _focusNodes[index + 1].requestFocus();
     } else if (value.isEmpty && index > 0) {
       _focusNodes[index - 1].requestFocus();
     }
 
-    // Auto verify when all 4 digits are entered
-    if (_otpCode.length == 4) {
+    // Auto verify when all 6 digits are entered
+    if (_otpCode.length == 6) {
       _handleVerifyOtp();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Get phone number from arguments
     final String phoneNumber = widget.phoneNumber ??
         ModalRoute.of(context)?.settings.arguments as String? ??
         '';
@@ -270,13 +267,16 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           ),
                           const SizedBox(height: 40),
 
-                          /// OTP Input Fields
+                          /// OTP Input Fields - 6 digits
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: List.generate(4, (index) {
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: List.generate(6, (index) {
                               return Container(
-                                width: 60,
+                                width: 50,
                                 height: 60,
+                                margin: EdgeInsets.symmetric(
+                                  horizontal: index == 2 ? 8 : 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
