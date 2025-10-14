@@ -63,10 +63,10 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading = false;
         });
       } else {
-        Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
-          '/login',
-              (route) => false,
-        );
+        // Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+        //   '/login',
+        //       (route) => false,
+        // );
         throw Exception(response['message'] ?? 'Failed to fetch bookings');
       }
     } catch (e) {
@@ -1079,64 +1079,63 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
             // Bottom Boost Business Section
-            Container(
-              margin: const EdgeInsets.all(24),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    Colors.brown.shade600,
-                    Colors.brown.shade500,
-                  ],
+            GestureDetector(
+              onTap: () {
+                Navigator.pushNamed(context, '/upgrade-profile');
+              },
+              child: Container(
+                margin: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                    colors: [
+                      Colors.brown.shade600,
+                      Colors.brown.shade500,
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: const BoxDecoration(
-                      color: Colors.orange,
-                      shape: BoxShape.circle,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.star,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.star,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Boost Your Business',
-                          style: GoogleFonts.lato(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Boost Your Business',
+                            style: GoogleFonts.lato(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
-                        ),
-                        Text(
-                          'Get a featured spot',
-                          style: GoogleFonts.lato(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.9),
+                          Text(
+                            'Get a featured spot',
+                            style: GoogleFonts.lato(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.9),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.pop(context);
-                      Navigator.pushNamed(context, '/upgrade-profile');
-                    },
-                    child: Container(
+                    Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 6,
@@ -1154,10 +1153,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            )
           ],
         ),
       ),

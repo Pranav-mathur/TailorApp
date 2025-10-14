@@ -32,194 +32,175 @@ class UpgradeProfileScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Star icon with checkmark
-              Container(
+              // Star icon with checkmark - using the provided PNG image
+              SizedBox(
                 width: 120,
                 height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade300,
-                  borderRadius: BorderRadius.circular(60),
-                ),
-                child: Stack(
-                  children: [
-                    Center(
-                      child: Icon(
-                        Icons.star,
-                        size: 80,
-                        color: Colors.amber.shade400,
-                      ),
-                    ),
-                    Positioned(
-                      right: 15,
-                      top: 15,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade200,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Icon(
-                          Icons.check,
-                          size: 20,
-                          color: Colors.brown,
-                        ),
-                      ),
-                    ),
-                  ],
+                child: Image.asset(
+                  'assets/images/star_check.png', // Update this path to where you save the PNG
+                  fit: BoxFit.contain,
                 ),
               ),
-              const SizedBox(height: 32),
 
-              // Main content card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.brown.shade700, Colors.brown.shade600],
+              // Main content card with overlap
+              Transform.translate(
+                offset: const Offset(0, -35),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.brown.shade700, Colors.brown.shade600],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.brown.withOpacity(0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.brown.withOpacity(0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    // Header
-                    Text(
-                      'Boost Your Business',
-                      style: GoogleFonts.lato(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Get a featured spot',
-                      style: GoogleFonts.lato(
-                        fontSize: 16,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Benefits container
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        children: [
-                          // Benefit 1: Increased Visibility
-                          _buildBenefitItem(
-                            emoji: '📈',
-                            title: 'Increased Visibility',
-                            description:
-                            'Increase your visibility on our homepage and in search results.',
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Benefit 2: More Orders & Higher Revenue
-                          _buildBenefitItem(
-                            emoji: '💰',
-                            title: 'More Orders & Higher Revenue',
-                            description:
-                            'Drive more customer inquiries and increase your earnings.',
-                          ),
-                          const SizedBox(height: 24),
-
-                          // Benefit 3: Enhanced Credibility
-                          _buildBenefitItem(
-                            emoji: '🏆',
-                            title: 'Enhanced Credibility',
-                            description:
-                            'Build a stronger, more professional brand reputation.',
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Upgrade button
-                    Container(
-                      width: double.infinity,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.red.shade400, Colors.red.shade500],
+                  child: Column(
+                    children: [
+                      // Header
+                      Text(
+                        'Boost Your Business',
+                        style: GoogleFonts.lato(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.red.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        textAlign: TextAlign.center,
                       ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () {
-                            // Handle upgrade action
-                            _showUpgradeConfirmation(context);
-                          },
+                      const SizedBox(height: 8),
+                      Text(
+                        'Get a featured spot',
+                        style: GoogleFonts.lato(
+                          fontSize: 16,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Benefits container
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          children: [
+                            // Benefit 1: Increased Visibility
+                            _buildBenefitItem(
+                              icon: Icons.show_chart,
+                              iconColor: Colors.green.shade600,
+                              backgroundColor: Colors.green.shade50,
+                              title: 'Increased Visibility',
+                              description:
+                              'Increase your visibility on our homepage and in search results.',
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Benefit 2: More Orders & Higher Revenue
+                            _buildBenefitItem(
+                              icon: Icons.card_giftcard,
+                              iconColor: Colors.orange.shade600,
+                              backgroundColor: Colors.orange.shade50,
+                              title: 'More Orders & Higher Revenue',
+                              description:
+                              'Drive more customer inquiries and increase your earnings.',
+                            ),
+                            const SizedBox(height: 24),
+
+                            // Benefit 3: Enhanced Credibility
+                            _buildBenefitItem(
+                              icon: Icons.emoji_events,
+                              iconColor: Colors.purple.shade600,
+                              backgroundColor: Colors.purple.shade50,
+                              title: 'Enhanced Credibility',
+                              description:
+                              'Build a stronger, more professional brand reputation.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Upgrade button
+                      Container(
+                        width: double.infinity,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.red.shade400, Colors.red.shade500],
+                          ),
                           borderRadius: BorderRadius.circular(28),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Upgrade Plan',
-                                  style: GoogleFonts.lato(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              // Handle upgrade action
+                              _showUpgradeConfirmation(context);
+                            },
+                            borderRadius: BorderRadius.circular(28),
+                            child: Center(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Upgrade Plan',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '•',
-                                  style: GoogleFonts.lato(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '•',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '₹199',
-                                  style: GoogleFonts.lato(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '₹199',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  ' /month',
-                                  style: GoogleFonts.lato(
-                                    fontSize: 14,
-                                    color: Colors.white.withOpacity(0.9),
+                                  Text(
+                                    ' /month',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 14,
+                                      color: Colors.white.withOpacity(0.9),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -231,7 +212,9 @@ class UpgradeProfileScreen extends StatelessWidget {
   }
 
   Widget _buildBenefitItem({
-    required String emoji,
+    required IconData icon,
+    required Color iconColor,
+    required Color backgroundColor,
     required String title,
     required String description,
   }) {
@@ -242,11 +225,15 @@ class UpgradeProfileScreen extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.green.shade50,
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Center(
-            child: Text(emoji, style: const TextStyle(fontSize: 24)),
+            child: Icon(
+              icon,
+              size: 28,
+              color: iconColor,
+            ),
           ),
         ),
         const SizedBox(width: 16),
