@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import '../providers/global_provider.dart';
 import '../providers/kyc_provider.dart';
 import '../services/tailor_service.dart';
+import '../services/location_service.dart';
 
 class ServicesScreen extends StatefulWidget {
   const ServicesScreen({super.key});
@@ -20,6 +21,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
   String _searchQuery = "";
+  final LocationService _locationService = LocationService();
 
   // Loading and error states
   bool _isLoading = true;
@@ -341,6 +343,23 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
     if (_canSave) {
       final provider = context.read<GlobalProvider>();
       final authProvider = context.read<AuthProvider>();
+
+      // Fetch location silently
+      Map<String, double>? location;
+      try {
+        debugPrint('📍 Fetching location...');
+        location = await _locationService.getCurrentLocation();
+        if (location != null) {
+          debugPrint('✅ Location fetched: ${location['latitude']}, ${location['longitude']}');
+          // Add location to provider
+          provider.setValue('location', location);
+        } else {
+          debugPrint('⚠️ Location not available, continuing without it');
+        }
+      } catch (e) {
+        debugPrint('⚠️ Location fetch failed, continuing without it: $e');
+        location = null;
+      }
 
       provider.printCurrentData();
 
