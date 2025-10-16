@@ -1,9 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:tailor_app/razorPayPayment.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:async';
 
-class UpgradeProfileScreen extends StatelessWidget {
-  const UpgradeProfileScreen({super.key});
+import '../providers/auth_provider.dart';
+
+class UpgradeProfileScreen extends StatefulWidget {
+  final String tailorId;
+  final String token;
+
+  const UpgradeProfileScreen({
+    super.key,
+    required this.tailorId,
+    required this.token,
+  });
+
+  @override
+  State<UpgradeProfileScreen> createState() => _UpgradeProfileScreenState();
+}
+
+class _UpgradeProfileScreenState extends State<UpgradeProfileScreen> {
+  final String baseUrl = 'http://100.27.221.127:3000/api/v1';
+  bool _isProcessing = false;
 
   @override
   Widget build(BuildContext context) {
@@ -32,17 +53,14 @@ class UpgradeProfileScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Star icon with checkmark - using the provided PNG image
               SizedBox(
                 width: 120,
                 height: 120,
                 child: Image.asset(
-                  'assets/images/star_check.png', // Update this path to where you save the PNG
+                  'assets/images/star_check.png',
                   fit: BoxFit.contain,
                 ),
               ),
-
-              // Main content card with overlap
               Transform.translate(
                 offset: const Offset(0, -35),
                 child: Container(
@@ -65,7 +83,6 @@ class UpgradeProfileScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      // Header
                       Text(
                         'Boost Your Business',
                         style: GoogleFonts.lato(
@@ -85,8 +102,6 @@ class UpgradeProfileScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 32),
-
-                      // Benefits container
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
@@ -95,7 +110,6 @@ class UpgradeProfileScreen extends StatelessWidget {
                         ),
                         child: Column(
                           children: [
-                            // Benefit 1: Increased Visibility
                             _buildBenefitItem(
                               icon: Icons.show_chart,
                               iconColor: Colors.green.shade600,
@@ -105,8 +119,6 @@ class UpgradeProfileScreen extends StatelessWidget {
                               'Increase your visibility on our homepage and in search results.',
                             ),
                             const SizedBox(height: 24),
-
-                            // Benefit 2: More Orders & Higher Revenue
                             _buildBenefitItem(
                               icon: Icons.card_giftcard,
                               iconColor: Colors.orange.shade600,
@@ -116,8 +128,6 @@ class UpgradeProfileScreen extends StatelessWidget {
                               'Drive more customer inquiries and increase your earnings.',
                             ),
                             const SizedBox(height: 24),
-
-                            // Benefit 3: Enhanced Credibility
                             _buildBenefitItem(
                               icon: Icons.emoji_events,
                               iconColor: Colors.purple.shade600,
@@ -130,8 +140,6 @@ class UpgradeProfileScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-
-                      // Upgrade button
                       Container(
                         width: double.infinity,
                         height: 56,
@@ -151,13 +159,19 @@ class UpgradeProfileScreen extends StatelessWidget {
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: () {
-                              // Handle upgrade action
-                              _showUpgradeConfirmation(context);
-                            },
+                            onTap: _isProcessing ? null : () => _showUpgradeConfirmation(context),
                             borderRadius: BorderRadius.circular(28),
                             child: Center(
-                              child: Row(
+                              child: _isProcessing
+                                  ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                                  : Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
@@ -179,7 +193,7 @@ class UpgradeProfileScreen extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '₹199',
+                                    '₹499',
                                     style: GoogleFonts.lato(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
@@ -268,6 +282,7 @@ class UpgradeProfileScreen extends StatelessWidget {
   void _showUpgradeConfirmation(BuildContext context) {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
@@ -275,7 +290,7 @@ class UpgradeProfileScreen extends StatelessWidget {
           style: GoogleFonts.lato(fontWeight: FontWeight.bold),
         ),
         content: Text(
-          'Are you sure you want to upgrade to the premium plan for ₹199/month?',
+          'Are you sure you want to upgrade to the premium plan for ₹499/month?',
           style: GoogleFonts.lato(),
         ),
         actions: [
@@ -291,13 +306,7 @@ class UpgradeProfileScreen extends StatelessWidget {
           TextButton(
             onPressed: () {
               Navigator.of(dialogContext).pop();
-              // Add upgrade logic here
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => RazorpayPaymentPage(amount: 199.0),
-                ),
-              );
+              _initiateUpgrade();
             },
             child: Text(
               'Upgrade',
@@ -308,6 +317,414 @@ class UpgradeProfileScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _initiateUpgrade() async {
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      // Step 1: Call sponsor API
+      final sponsorResponse = await _callSponsorAPI();
+
+      if (sponsorResponse['success'] == true) {
+        final paymentLink = sponsorResponse['paymentLink'];
+
+        // Step 2: Open payment link
+        await _openPaymentLink(paymentLink);
+
+        // Step 3: Wait for user to complete payment and return
+        // Show a waiting dialog
+        if (mounted) {
+          _showPaymentProcessingDialog();
+        }
+      } else {
+        if (mounted) {
+          _showErrorDialog(sponsorResponse['message'] ?? 'Failed to initiate upgrade');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorDialog('An error occurred: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _callSponsorAPI() async {
+
+    try {
+      final url = Uri.parse('http://100.27.221.127:3000/api/v1/tailor/sponsor');
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.token;
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${token}',
+        },
+
+        // body: json.encode({
+        //   'tailorId': widget.tailorId,
+        // }),
+      );
+      debugPrint("✅ Sponsor API token: ${token}");
+      debugPrint("✅ Sponsor API Response: ${response.body}");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return {
+          'success': true,
+          'paymentLink': data['paymentLink'],
+          'paymentLinkId': data['paymentLinkId'],
+          'amount': data['amount'],
+          'message': data['message'],
+        };
+      } else {
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Failed to generate payment link',
+        };
+      }
+    } catch (e) {
+      debugPrint("❌ Sponsor API Error: ${e.toString()}");
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  Future<void> _openPaymentLink(String paymentLink) async {
+    try {
+      final Uri url = Uri.parse(paymentLink);
+      if (await canLaunchUrl(url)) {
+        await launchUrl(
+          url,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        throw Exception('Could not launch payment link');
+      }
+    } catch (e) {
+      debugPrint("❌ Error opening payment link: ${e.toString()}");
+      rethrow;
+    }
+  }
+
+  void _showPaymentProcessingDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Complete Payment',
+            style: GoogleFonts.lato(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Please complete the payment in your browser and return to the app.',
+                style: GoogleFonts.lato(),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _checkPaymentStatus();
+              },
+              child: Text(
+                'I\'ve Completed Payment',
+                style: GoogleFonts.lato(
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkPaymentStatus() async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(
+                'Verifying payment...',
+                style: GoogleFonts.lato(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Wait for 5 seconds
+    await Future.delayed(const Duration(seconds: 7));
+
+    // Call getTailorProfile API
+    final profileResponse = await _getTailorProfile();
+
+    // Close loading dialog
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+
+    if (profileResponse['success'] == true) {
+      final tailorData = profileResponse['data'];
+      final isSponsored = tailorData['is_sponsored'] ?? false;
+
+      if (isSponsored) {
+        // Show success screen
+        if (mounted) {
+          _showSuccessScreen();
+        }
+      } else {
+        // Payment not verified yet
+        if (mounted) {
+          _showPaymentPendingDialog();
+        }
+      }
+    } else {
+      if (mounted) {
+        _showErrorDialog(profileResponse['message'] ?? 'Failed to verify payment');
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _getTailorProfile() async {
+    try {
+      final url = Uri.parse('$baseUrl/tailor/profile');
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.token;
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${token}',
+        },
+      );
+
+      debugPrint("✅ Get Profile Response: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return {
+          'success': true,
+          'data': data['tailor'] ?? {},
+          'message': data['message'] ?? 'Profile fetched successfully',
+        };
+      } else if (response.statusCode == 401) {
+        return {
+          'success': false,
+          'message': 'Unauthorized access. Please login again.',
+        };
+      } else {
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Failed to fetch profile',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
+
+  void _showSuccessScreen() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => ProfileUpgradedSuccessScreen(
+          onComplete: () {
+            // Navigate back to home after success screen
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showPaymentPendingDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Payment Pending',
+          style: GoogleFonts.lato(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Your payment is being processed. Please wait a few moments and try again.',
+          style: GoogleFonts.lato(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+            },
+            child: Text(
+              'OK',
+              style: GoogleFonts.lato(color: Colors.blue),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _checkPaymentStatus();
+            },
+            child: Text(
+              'Check Again',
+              style: GoogleFonts.lato(
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Error',
+          style: GoogleFonts.lato(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          message,
+          style: GoogleFonts.lato(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+            },
+            child: Text(
+              'OK',
+              style: GoogleFonts.lato(color: Colors.blue),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Success Screen Widget
+class ProfileUpgradedSuccessScreen extends StatefulWidget {
+  final VoidCallback onComplete;
+
+  const ProfileUpgradedSuccessScreen({
+    super.key,
+    required this.onComplete,
+  });
+
+  @override
+  State<ProfileUpgradedSuccessScreen> createState() =>
+      _ProfileUpgradedSuccessScreenState();
+}
+
+class _ProfileUpgradedSuccessScreenState
+    extends State<ProfileUpgradedSuccessScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Auto navigate after 4 seconds
+    Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        widget.onComplete();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check,
+                  color: Colors.white,
+                  size: 50,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Profile Upgraded',
+                style: GoogleFonts.lato(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Your profile will be\nfeatured from now',
+                style: GoogleFonts.lato(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(),
+            ],
+          ),
+        ),
       ),
     );
   }

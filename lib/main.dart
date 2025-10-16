@@ -62,7 +62,7 @@ class MyApp extends StatelessWidget {
         '/past-orders': (context) => const PastOrdersScreen(),
         '/my-profile': (context) => const MyProfileScreen(),
         '/bank-details': (context) => const BankDetailsScreen(),
-        '/upgrade-profile': (context) => const UpgradeProfileScreen(),
+        '/upgrade-profile': (context) => const UpgradeProfileScreen(tailorId: '', token: '',),
       },
     );
   }

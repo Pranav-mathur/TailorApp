@@ -431,7 +431,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       GestureDetector(
                         onTap: () {
-                          Navigator.pushNamed(context, '/upgrade-profile');
+                          final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                          Navigator.pushNamed(
+                            context,
+                            '/upgrade-profile',
+                            arguments: {
+                              'token': authProvider.token,
+                            },
+                          );
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -1081,7 +1088,14 @@ class _HomeScreenState extends State<HomeScreen> {
             // Bottom Boost Business Section
             GestureDetector(
               onTap: () {
-                Navigator.pushNamed(context, '/upgrade-profile');
+                final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                Navigator.pushNamed(
+                  context,
+                  '/upgrade-profile',
+                  arguments: {
+                    'token': authProvider.token,
+                  },
+                );
               },
               child: Container(
                 margin: const EdgeInsets.all(24),

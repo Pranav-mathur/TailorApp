@@ -64,6 +64,7 @@ class TailorService {
         },
         body: json.encode(body),
       );
+      print(body["location"]);
 
       debugPrint("✅ Create Profile Request: ${json.encode(body)}");
       debugPrint("✅ Create Profile Response: ${response.body}");
