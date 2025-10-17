@@ -574,7 +574,9 @@ class _UpgradeProfileScreenState extends State<UpgradeProfileScreen> {
         builder: (context) => ProfileUpgradedSuccessScreen(
           onComplete: () {
             // Navigate back to home after success screen
-            Navigator.of(context).popUntil((route) => route.isFirst);
+            Navigator.of(
+              context,
+            ).pushNamedAndRemoveUntil('/home', (route) => false);
           },
         ),
       ),
