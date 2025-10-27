@@ -44,6 +44,27 @@ class GlobalProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  List<Map<String, dynamic>> getCategories() {
+    if (globalData['categories'] == null) {
+      return <Map<String, dynamic>>[];
+    }
+
+    if (globalData['categories'] is List<Map<String, dynamic>>) {
+      return globalData['categories'] as List<Map<String, dynamic>>;
+    } else if (globalData['categories'] is List) {
+      // Convert and cache the proper type
+      final categories = List<Map<String, dynamic>>.from(
+          (globalData['categories'] as List).map((item) =>
+          item is Map<String, dynamic> ? item : Map<String, dynamic>.from(item as Map)
+          )
+      );
+      globalData['categories'] = categories;
+      return categories;
+    }
+
+    return <Map<String, dynamic>>[];
+  }
+
   void addCategory({
     required String categoryId,
     required double price,

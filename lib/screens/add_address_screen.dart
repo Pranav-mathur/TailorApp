@@ -197,6 +197,7 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
               controller: _pincodeController,
               hintText: "Enter Pincode",
               keyboardType: TextInputType.number,
+              maxLength: 6,
             ),
             const SizedBox(height: 24),
 
@@ -205,6 +206,7 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
               controller: _mobileController,
               hintText: "Enter Mobile Number",
               keyboardType: TextInputType.phone,
+              maxLength: 10,
             ),
             const SizedBox(height: 60),
 
@@ -273,6 +275,7 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
     required TextEditingController controller,
     required String hintText,
     TextInputType keyboardType = TextInputType.text,
+    int? maxLength,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -283,6 +286,7 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
+        maxLength: maxLength,
         style: GoogleFonts.lato(
           fontSize: 16,
           color: Colors.black,
@@ -296,6 +300,7 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
           ),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.all(16),
+          counterText: '', // This hides the counter text (0/6)
         ),
       ),
     );

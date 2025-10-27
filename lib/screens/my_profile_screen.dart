@@ -7,6 +7,7 @@ import 'package:path/path.dart' as path;
 import '../providers/auth_provider.dart';
 import '../providers/kyc_provider.dart';
 import '../services/tailor_service.dart';
+import 'services_screen.dart';
 import 'edit_services_screen.dart';
 
 class MyProfileScreen extends StatefulWidget {
@@ -2093,52 +2094,51 @@ class _MyProfileScreenState extends State<MyProfileScreen> with TickerProviderSt
           ],
         ),
       ),
-        bottomNavigationBar: Container(
-          padding: const EdgeInsets.all(20),
-          child: Container(
-            width: double.infinity,
-            height: 55,
-            decoration: BoxDecoration(
-              color: Colors.red,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: ElevatedButton(
-              // onPressed: () async {
-              //   // Navigate to EditServicesScreen and wait for result
-              //   final result = await Navigator.push(
-              //     context,
-              //     MaterialPageRoute(
-              //       builder: (context) => EditServicesScreen(
-              //         profileData: _profileData!,
-              //         apiData: _apiData!,
-              //       ),
-              //     ),
-              //   );
-              //
-              //   // If result is true, reload the profile
-              //   if (result == true) {
-              //     _loadProfileData();
-              //   }
-              // },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(20),
+        child: Container(
+          width: double.infinity,
+          height: 55,
+          decoration: BoxDecoration(
+            color: Colors.red,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: ElevatedButton(
+            onPressed: () async {
+              // Navigate to ServicesScreen in edit mode and wait for result
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ServicesScreen(
+                    isEditMode: true,
+                    existingCategories: _apiData!['categories'],
+                  ),
                 ),
+              );
+
+              // If result is true, reload the profile
+              if (result == true) {
+                await _loadProfileData();
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
               ),
-              onPressed: () {  },
-              child: Text(
-                'Edit Services',
-                style: GoogleFonts.lato(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+            ),
+            child: Text(
+              'Edit Services',
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ),
         ),
+      ),
 
     );
   }

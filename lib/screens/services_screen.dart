@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -11,7 +12,14 @@ import '../services/tailor_service.dart';
 import '../services/location_service.dart';
 
 class ServicesScreen extends StatefulWidget {
-  const ServicesScreen({super.key});
+  final bool isEditMode;
+  final List<dynamic>? existingCategories;
+
+  const ServicesScreen({
+    super.key,
+    this.isEditMode = false,
+    this.existingCategories,
+  });
 
   @override
   State<ServicesScreen> createState() => _ServicesScreenState();
@@ -34,13 +42,33 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+
+    // Clear categories from GlobalProvider to prevent interference
+    final provider = Provider.of<GlobalProvider>(context, listen: false);
+    provider.globalData['categories'] = <Map<String, dynamic>>[];
+
     _fetchCategories(); // Fetch categories when component loads
+
+    // If in edit mode, pre-populate existing services after categories are loaded
+    if (widget.isEditMode && widget.existingCategories != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _prePopulateExistingServices();
+      });
+    }
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
+
+    // Only clear categories if we're in edit mode and user is navigating away without saving
+    // This prevents edit mode changes from affecting KYC flow
+    if (widget.isEditMode) {
+      final provider = Provider.of<GlobalProvider>(context, listen: false);
+      provider.globalData['categories'] = <Map<String, dynamic>>[];
+    }
+
     super.dispose();
   }
 
@@ -208,6 +236,47 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
     });
   }
 
+  // Method to pre-populate existing services in edit mode
+  void _prePopulateExistingServices() {
+    if (!widget.isEditMode || widget.existingCategories == null) return;
+
+    final provider = Provider.of<GlobalProvider>(context, listen: false);
+
+    // Clear existing categories
+    provider.globalData['categories'] = <Map<String, dynamic>>[];
+
+    // Process each existing category
+    for (var category in widget.existingCategories!) {
+      try {
+        final categoryId = category['category_id']?.toString() ?? '';
+        final subCategoryName = category['sub_category_name']?.toString() ?? '';
+        final price = (category['price'] is int)
+            ? (category['price'] as int).toDouble()
+            : (category['price'] as double?) ?? 0.0;
+        final deliveryTime = category['delivery_time']?.toString() ?? '';
+        final displayImages = (category['display_images'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ?? [];
+
+        if (categoryId.isNotEmpty && subCategoryName.isNotEmpty) {
+          provider.addCategory(
+            categoryId: categoryId,
+            price: price,
+            delivery_time: deliveryTime,
+            display_images: displayImages,
+            sub_category_name: subCategoryName,
+          );
+        }
+      } catch (e) {
+        print('Error pre-populating category: $e');
+      }
+    }
+
+    setState(() {});
+
+    debugPrint('✅ Pre-populated ${widget.existingCategories!.length} services in edit mode');
+  }
+
   // Method to refresh categories
   Future<void> _refreshCategories() async {
     await _fetchCategories();
@@ -216,9 +285,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
   // Check if a service is selected
   bool _isServiceSelected(String serviceName) {
     final provider = context.read<GlobalProvider>();
-    final categories = provider.getValue('categories') as List<Map<String, dynamic>>?;
-
-    if (categories == null) return false;
+    final categories = provider.getCategories();
 
     return categories.any((category) => category['sub_category_name'] == serviceName);
   }
@@ -226,9 +293,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
   // Get service details
   Map<String, dynamic>? _getServiceDetails(String serviceName) {
     final provider = context.read<GlobalProvider>();
-    final categories = provider.getValue('categories') as List<Map<String, dynamic>>?;
-
-    if (categories == null) return null;
+    final categories = provider.getCategories();
 
     try {
       return categories.firstWhere(
@@ -244,8 +309,14 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
       _showServiceDetailsModal(serviceName, isNew: true);
     } else {
       // Deselect and remove from global provider
-      final provider = context.read<GlobalProvider>();
-      provider.removeCategory(serviceName);
+      final provider = Provider.of<GlobalProvider>(context, listen: false);
+      final categories = provider.getCategories();
+
+      // Remove the category with matching sub_category_name
+      categories.removeWhere((category) => category['sub_category_name'] == serviceName);
+
+      // Trigger update
+      provider.notifyListeners();
       setState(() {});
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -290,40 +361,77 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => ServiceDetailsModal(
+      isDismissible: true,
+      enableDrag: true,
+      builder: (BuildContext modalContext) => ServiceDetailsModal(
         serviceName: serviceName,
         categoryId: categoryId!,
         existingDetails: existingDetails,
         onSave: (details) {
-          final provider = context.read<GlobalProvider>();
+          final provider = Provider.of<GlobalProvider>(context, listen: false);
 
           if (isNew) {
             provider.addCategory(
               categoryId: categoryId!,
               price: details['price'] as double,
-              delivery_time: details['delivery_time'] as String? ?? '',
+              delivery_time: details['delivery_time'] as String?,
               display_images: (details['display_images'] as List<dynamic>?)
-                  ?.map((e) => e.toString()).toList() ?? [],
+                  ?.map((e) => e.toString()).toList(),
               sub_category_name: serviceName,
             );
+
           } else {
-            provider.updateCategory(
-              categoryId: categoryId!,
-              price: details['price'] as double?,
-              deliveryTime: details['delivery_time'] as String?,
-              displayImages: (details['display_images'] as List<dynamic>?)
-                  ?.map((e) => e.toString()).toList(),
-              categoryName: serviceName,
+            // Update existing service
+            final categories = provider.getCategories();
+            final index = categories.indexWhere(
+                    (cat) => cat['sub_category_name'] == serviceName
             );
+
+            if (index != -1) {
+              categories[index] = {
+                'category_id': categoryId!,
+                'price': details['price'] as double,
+                'delivery_time': details['delivery_time'] as String? ?? '',
+                'display_images': (details['display_images'] as List<dynamic>?)
+                    ?.map((e) => e.toString()).toList() ?? [],
+                'sub_category_name': serviceName,
+              };
+              provider.notifyListeners();
+            }
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('$serviceName updated. Click "Update Services" to save all changes.'),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            }
           }
 
-          provider.printCurrentData();
-          setState(() {});
+          // Update state and close modal without navigating back
+          if (mounted) {
+            setState(() {});
+          }
+          Navigator.of(modalContext).pop(); // Only close the modal, not the screen
         },
         onCancel: () {
           if (isNew) {
-            setState(() {});
+            final provider = Provider.of<GlobalProvider>(context, listen: false);
+            final categories = provider.getCategories();
+
+            categories.removeWhere((category) =>
+            category['sub_category_name'] == serviceName
+            );
+
+            provider.notifyListeners();
+            if (mounted) {
+              setState(() {});
+            }
           }
+          Navigator.of(modalContext).pop(); // Only close the modal
         },
       ),
     );
@@ -335,8 +443,8 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
 
   bool get _canSave {
     final provider = context.read<GlobalProvider>();
-    final categories = provider.getValue('categories') as List<Map<String, dynamic>>?;
-    return categories != null && categories.isNotEmpty;
+    final categories = provider.getCategories();
+    return categories.isNotEmpty;
   }
 
   void _saveChanges() async {
@@ -344,106 +452,182 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
       final provider = context.read<GlobalProvider>();
       final authProvider = context.read<AuthProvider>();
 
-      // Fetch location silently
-      Map<String, double>? location;
-      try {
-        debugPrint('📍 Fetching location...');
-        location = await _locationService.getCurrentLocation();
-        if (location != null) {
-          debugPrint('✅ Location fetched: ${location['latitude']}, ${location['longitude']}');
-          // Add location to provider
-          provider.setValue('location', location);
-        } else {
-          debugPrint('⚠️ Location not available, continuing without it');
-        }
-      } catch (e) {
-        debugPrint('⚠️ Location fetch failed, continuing without it: $e');
-        location = null;
-      }
-
-      provider.printCurrentData();
-
-      try {
-        // Show loading dialog
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(
-                  color: Colors.red,
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Saving your profile...',
-                  style: GoogleFonts.lato(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[700],
+      // If in edit mode, call update API
+      if (widget.isEditMode) {
+        try {
+          // Show loading dialog
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(
+                    color: Colors.red,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Please wait while we create your tailor profile.',
-                  style: GoogleFonts.lato(
-                    fontSize: 14,
-                    color: Colors.grey[600],
+                  const SizedBox(height: 20),
+                  Text(
+                    'Updating your services...',
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[700],
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
+          );
 
-        final tailorService = TailorService();
+          final tailorService = TailorService();
 
-        final body = {
-          "categories": provider.getValue("categories") ?? [],
-          "portfolio_images": provider.getValue("images") ?? [],
-          "name": provider.getValue("name") ?? "",
-          "address": provider.getValue("address") ?? "",
-          "email": provider.getValue("email") ?? "",
-          "phone": provider.getValue("phone") ?? "",
-        };
+          final body = {
+            "categories": provider.globalData['categories'] ?? [],
+          };
 
-        print('Request body: $body');
+          print('Update Request body: $body');
 
-        final response = await tailorService.createTailorProfile(
-          token: authProvider.token ?? "",
-          body: provider.getAllData(),
-        );
+          final response = await tailorService.updateTailorProfile(
+            token: authProvider.token ?? "",
+            body: body,
+          );
 
-        if (mounted) {
-          Navigator.of(context).pop();
+          if (mounted) {
+            Navigator.of(context).pop(); // Close loading dialog
+          }
+
+          print('Update API Response: $response');
+
+          if (response['success'] == true) {
+            // Clear categories after successful save to prevent affecting KYC flow
+            provider.globalData['categories'] = <Map<String, dynamic>>[];
+
+            _showSuccessDialog(
+              response['message'] ?? 'Services updated successfully',
+              isEditMode: true,
+            );
+          } else {
+            _showErrorSnackbar(response['message'] ?? 'Failed to update services');
+          }
+
+        } catch (e) {
+          if (mounted && Navigator.canPop(context)) {
+            Navigator.of(context).pop();
+          }
+
+          print('Error updating services: $e');
+          _showErrorSnackbar('Network error: ${e.toString()}');
+        }
+      } else {
+        // Original create profile flow
+        // Fetch location silently
+        Map<String, double>? location;
+        try {
+          debugPrint('📍 Fetching location...');
+          location = await _locationService.getCurrentLocation();
+          if (location != null) {
+            debugPrint('✅ Location fetched: ${location['latitude']}, ${location['longitude']}');
+            provider.setValue('location', location);
+          } else {
+            debugPrint('⚠️ Location not available, continuing without it');
+          }
+        } catch (e) {
+          debugPrint('⚠️ Location fetch failed, continuing without it: $e');
+          location = null;
         }
 
-        print('API Response: $response');
+        provider.printCurrentData();
 
-        if (response['success'] == true) {
-          _showSuccessDialog(response['message'] ?? 'Profile created successfully');
-        } else {
-          _showErrorSnackbar(response['message'] ?? 'Failed to create profile');
+        try {
+          // Show loading dialog
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Saving your profile...',
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey[700],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Please wait while we create your tailor profile.',
+                    style: GoogleFonts.lato(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          final tailorService = TailorService();
+
+          final body = {
+            "categories": provider.globalData['categories'] ?? [],
+            "portfolio_images": provider.globalData['images'] ?? [],
+            "name": provider.globalData['name'] ?? "",
+            "address": provider.globalData['address'] ?? "",
+            "email": provider.globalData['email'] ?? "",
+            "phone": provider.globalData['phone'] ?? "",
+          };
+
+          print('Request body: $body');
+
+          final response = await tailorService.createTailorProfile(
+            token: authProvider.token ?? "",
+            body: provider.getAllData(),
+          );
+
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+
+          print('API Response: $response');
+
+          if (response['success'] == true) {
+            _showSuccessDialog(
+              response['message'] ?? 'Profile created successfully',
+              isEditMode: false,
+            );
+          } else {
+            _showErrorSnackbar(response['message'] ?? 'Failed to create profile');
+          }
+
+        } catch (e) {
+          if (mounted && Navigator.canPop(context)) {
+            Navigator.of(context).pop();
+          }
+
+          print('Error creating profile: $e');
+          _showErrorSnackbar('Network error: ${e.toString()}');
         }
-
-      } catch (e) {
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.of(context).pop();
-        }
-
-        print('Error creating profile: $e');
-        _showErrorSnackbar('Network error: ${e.toString()}');
       }
     }
   }
 
-  void _showSuccessDialog(String message) {
+  void _showSuccessDialog(String message, {required bool isEditMode}) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -469,7 +653,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
             ),
             const SizedBox(height: 20),
             Text(
-              'Services Saved Successfully!',
+              isEditMode ? 'All Services Updated Successfully!' : 'Services Saved Successfully!',
               style: GoogleFonts.lato(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -490,8 +674,14 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.pushReplacementNamed(context, '/home');
+              Navigator.of(context).pop(); // Close dialog
+              if (isEditMode) {
+                // Return true to indicate success and go back to profile
+                Navigator.of(context).pop(true);
+              } else {
+                // Original flow - go to home
+                Navigator.pushReplacementNamed(context, '/home');
+              }
             },
             child: Text(
               'Continue',
@@ -556,7 +746,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
               onPressed: () => Navigator.of(context).pop(),
             ),
             title: Text(
-              'Services',
+              widget.isEditMode ? 'Edit Services' : 'Services',
               style: GoogleFonts.lato(
                 color: Colors.black,
                 fontSize: 20,
@@ -780,7 +970,7 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
                 ),
               ),
               child: Text(
-                'Save Changes',
+                widget.isEditMode ? 'Update Services' : 'Save Changes',
                 style: GoogleFonts.lato(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1257,7 +1447,7 @@ class _ServiceDetailsModalState extends State<ServiceDetailsModal> {
     };
 
     widget.onSave(details);
-    Navigator.pop(context);
+    // Don't call Navigator.pop here - let onSave callback handle it
   }
 
   @override
@@ -1316,28 +1506,31 @@ class _ServiceDetailsModalState extends State<ServiceDetailsModal> {
                 border: Border.all(color: Colors.grey[300]!),
               ),
               child: TextField(
-                controller: _priceController,
-                style: GoogleFonts.lato(
-                  fontSize: 16,
-                  color: Colors.black,
-                  fontWeight: FontWeight.w600,
-                ),
-                decoration: InputDecoration(
-                  hintText: 'Enter the price',
-                  hintStyle: GoogleFonts.lato(
-                    color: Colors.grey[400],
-                    fontSize: 16,
-                  ),
-                  prefixText: '₹ ',
-                  prefixStyle: GoogleFonts.lato(
+                  controller: _priceController,
+                  style: GoogleFonts.lato(
                     fontSize: 16,
                     color: Colors.black,
                     fontWeight: FontWeight.w600,
                   ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(16),
-                ),
-                keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Enter the price',
+                    hintStyle: GoogleFonts.lato(
+                      color: Colors.grey[400],
+                      fontSize: 16,
+                    ),
+                    prefixText: '₹ ',
+                    prefixStyle: GoogleFonts.lato(
+                      fontSize: 16,
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.all(16),
+                  ),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ]
               ),
             ),
 

@@ -55,6 +55,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
       print('API Response: $response'); // Debug print
 
+      // Check for 401 unauthorized or unauthorized message
+      if (response['statusCode'] == 401 ||
+          (response['message'] != null &&
+              response['message'].toString().toLowerCase().contains('unauthorized access'))) {
+        // Clear auth state
+        await authProvider.logout();
+
+        // Navigate to login page
+        if (mounted) {
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            '/login',
+                (route) => false,
+          );
+        }
+        return;
+      }
+
       if (response['success'] == true) {
         final responseData = response['data'] as Map<String, dynamic>;
 
