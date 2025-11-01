@@ -43,7 +43,7 @@ class KycService {
   //     }
   //
   //   } catch (e) {
-  //     debugPrint('KycService upload error: $e');
+  //     debugPrint('KycService upload error: $e');x
   //     rethrow;
   //   }
   // }

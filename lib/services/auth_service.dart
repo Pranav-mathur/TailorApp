@@ -1,14 +1,103 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class AuthService {
   final String baseUrl = "http://100.27.221.127:3000/api/v1";
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  // Storage keys
+  static const String _tokenKey = 'token';
+  static const String _phoneNumberKey = 'phone_number';
+  static const String _userIdKey = 'userId';
+  static const String _isNewUserKey = 'is_new_user';
+
+  // Get token
+  Future<String?> getToken() async {
+    try {
+      return await _secureStorage.read(key: _tokenKey);
+    } catch (e) {
+      debugPrint('Error getting token: $e');
+      return null;
+    }
+  }
+
+  // Save token
+  Future<void> saveToken(String token) async {
+    try {
+      await _secureStorage.write(key: _tokenKey, value: token);
+    } catch (e) {
+      debugPrint('Error saving token: $e');
+    }
+  }
+
+  // Get phone number
+  Future<String?> getPhoneNumber() async {
+    try {
+      return await _secureStorage.read(key: _phoneNumberKey);
+    } catch (e) {
+      debugPrint('Error getting phone number: $e');
+      return null;
+    }
+  }
+
+  // Save phone number
+  Future<void> savePhoneNumber(String phoneNumber) async {
+    try {
+      await _secureStorage.write(key: _phoneNumberKey, value: phoneNumber);
+    } catch (e) {
+      debugPrint('Error saving phone number: $e');
+    }
+  }
+
+  // Get user ID
+  Future<String?> getUserId() async {
+    try {
+      return await _secureStorage.read(key: _userIdKey);
+    } catch (e) {
+      debugPrint('Error getting user ID: $e');
+      return null;
+    }
+  }
+
+  // Save user ID
+  Future<void> saveUserId(String userId) async {
+    try {
+      await _secureStorage.write(key: _userIdKey, value: userId);
+    } catch (e) {
+      debugPrint('Error saving user ID: $e');
+    }
+  }
+
+  // Get is_new_user status
+  Future<bool?> getIsNewUser() async {
+    try {
+      final value = await _secureStorage.read(key: _isNewUserKey);
+      if (value == null) return null;
+      return value.toLowerCase() == 'true';
+    } catch (e) {
+      debugPrint('Error getting is_new_user: $e');
+      return null;
+    }
+  }
+
+  // Save is_new_user status
+  Future<void> saveIsNewUser(bool isNewUser) async {
+    try {
+      await _secureStorage.write(key: _isNewUserKey, value: isNewUser.toString());
+    } catch (e) {
+      debugPrint('Error saving is_new_user: $e');
+    }
+  }
 
   // Send OTP to mobile number
   Future<Map<String, dynamic>> sendOtp(String mobileNumber) async {
     final url = Uri.parse("$baseUrl/auth/login/send-otp");
     debugPrint("✅ Send OTP API Payload: $mobileNumber");
+
+    // Save phone number for later use
+    await savePhoneNumber(mobileNumber);
 
     final response = await http.post(
       url,
@@ -18,7 +107,6 @@ class AuthService {
 
     debugPrint("✅ Send OTP API Response: ${response.statusCode}");
     debugPrint("✅ Send OTP API Response Body: ${response.body}");
-    debugPrint("✅ Send OTP API Response Body: ${response}");
 
     if (response.statusCode == 200) {
       return {
@@ -54,7 +142,28 @@ class AuthService {
     debugPrint("✅ Verify OTP API Response Body: ${response.body}");
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      final result = jsonDecode(response.body);
+
+      // Save token, userId, phoneNumber, and is_new_user to secure storage
+      if (result['token'] != null) {
+        await saveToken(result['token']);
+        await savePhoneNumber(mobileNumber);
+
+        if (result['userId'] != null) {
+          await saveUserId(result['userId']);
+        }
+
+        // Save is_new_user status if present in response
+        if (result.containsKey('is_new_user')) {
+          final isNewUser = result['is_new_user'] == true || result['is_new_user'] == 'true';
+          await saveIsNewUser(isNewUser);
+        } else if (result.containsKey('isNewUser')) {
+          final isNewUser = result['isNewUser'] == true || result['isNewUser'] == 'true';
+          await saveIsNewUser(isNewUser);
+        }
+      }
+
+      return result;
     } else {
       // Handle specific error cases
       if (response.statusCode == 400) {
@@ -86,6 +195,8 @@ class AuthService {
     debugPrint("✅ Logout API Response Body: ${response.body}");
 
     if (response.statusCode == 200) {
+      // Clear all secure storage
+      await clearAll();
       return jsonDecode(response.body);
     } else {
       throw Exception("Logout failed: ${response.body}");
@@ -127,6 +238,32 @@ class AuthService {
         return await http.delete(url, headers: headers);
       default:
         return await http.get(url, headers: headers);
+    }
+  }
+
+  // Check if user is authenticated
+  Future<bool> isAuthenticated() async {
+    final token = await getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  // Clear session (for unauthorized errors)
+  Future<void> clearSession() async {
+    try {
+      await _secureStorage.deleteAll();
+      debugPrint('✅ Session cleared successfully');
+    } catch (e) {
+      debugPrint('❌ Error clearing session: $e');
+    }
+  }
+
+  // Clear all stored data
+  Future<void> clearAll() async {
+    try {
+      await _secureStorage.deleteAll();
+      debugPrint('✅ All secure storage cleared');
+    } catch (e) {
+      debugPrint('Error clearing storage: $e');
     }
   }
 }

@@ -575,10 +575,10 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        // leading: IconButton(
+        //   icon: const Icon(Icons.arrow_back, color: Colors.black),
+        //   onPressed: () => Navigator.of(context).pop(),
+        // ),
         title: Text(
           'KYC Verification',
           style: GoogleFonts.lato(
@@ -587,7 +587,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        centerTitle: false,
+        centerTitle: true,
       ),
       body: Column(
         children: [

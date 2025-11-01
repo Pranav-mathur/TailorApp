@@ -501,6 +501,8 @@ class _ServicesScreenState extends State<ServicesScreen> with TickerProviderStat
             Navigator.of(context).pop(); // Close loading dialog
           }
 
+          await authProvider.completeOnboarding();
+
           print('Update API Response: $response');
 
           if (response['success'] == true) {
