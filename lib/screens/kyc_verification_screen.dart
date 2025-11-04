@@ -536,12 +536,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(width: 3),
-                      Icon(
-                        Icons.help_outline,
-                        size: 12,
-                        color: Colors.brown.shade700,
-                      ),
+
                     ],
                   ),
                 ),
@@ -633,13 +628,13 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'To verify lorem ipsum',
-                  style: GoogleFonts.lato(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
+                // Text(
+                //   'To verify lorem ipsum',
+                //   style: GoogleFonts.lato(
+                //     fontSize: 14,
+                //     color: Colors.grey[600],
+                //   ),
+                // ),
               ],
             ),
           ),

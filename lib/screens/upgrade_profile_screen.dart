@@ -477,17 +477,17 @@ class _UpgradeProfileScreenState extends State<UpgradeProfileScreen> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: 16),
-              Text(
-                'Verifying payment...',
-                style: GoogleFonts.lato(),
-              ),
-            ],
-          ),
+          // child: Column(
+          //   mainAxisSize: MainAxisSize.min,
+          //   children: [
+          //     const CircularProgressIndicator(),
+          //     const SizedBox(height: 16),
+          //     Text(
+          //       'Verifying payment...',
+          //       style: GoogleFonts.lato(),
+          //     ),
+          //   ],
+          // ),
         ),
       ),
     );

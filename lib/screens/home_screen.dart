@@ -25,6 +25,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> filteredBookings = [];
   String _searchQuery = "";
 
+  // Sponsored status
+  bool _isSponsored = false;
+
   @override
   void initState() {
     super.initState();
@@ -80,10 +83,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _isLoading = false;
         });
       } else {
-        // Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
-        //   '/login',
-        //       (route) => false,
-        // );
         throw Exception(response['message'] ?? 'Failed to fetch bookings');
       }
     } catch (e) {
@@ -116,23 +115,31 @@ class _HomeScreenState extends State<HomeScreen> {
     final bookingsData = responseData['data'] as List<dynamic>? ?? [];
     final pagination = responseData['pagination'] as Map<String, dynamic>? ?? {};
 
+    // Extract is_sponsored status from tailor_details
+    _isSponsored = false;
+    _isSponsored = tailorDetails['is_sponsored'] == true;
+    print('=== SPONSORED STATUS ===');
+    print('Is Sponsored: $_isSponsored');
+
     // Convert to list of maps for easier processing
     allBookings = bookingsData.map((booking) => booking as Map<String, dynamic>).toList();
 
-    // Filter out completed and cancelled orders for main display
+    // Filter out delivered and cancelled orders for main display
     final activeBookings = allBookings.where((booking) {
       final status = booking['status']?.toString().toLowerCase() ?? '';
-      return status != 'completed' && status != 'cancelled';
+      return status != 'delivered' && status != 'cancelled';
     }).toList();
 
     // Separate bookings by status for different sections
     final requestedBookings = activeBookings.where((booking) {
-      return booking['status']?.toString().toLowerCase() == 'requested';
+      return booking['status']?.toString().toLowerCase() == 'order confirmed';
     }).toList();
 
     final ongoingBookings = activeBookings.where((booking) {
       final status = booking['status']?.toString().toLowerCase() ?? '';
-      return status == 'confirmed' || status == 'in progress';
+      return status == 'measurement done' ||
+          status == 'in progress' ||
+          status == 'ready to deliver';
     }).toList();
 
     // Create home data structure
@@ -171,15 +178,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final orderId = bookingId.length >= 5 ? bookingId.substring(0, 5) : bookingId;
 
     final customer = booking['customer'] as Map<String, dynamic>? ?? {};
-    final category = booking['category'] as Map<String, dynamic>? ?? {};
+
+    // Handle categories list to get price and service name
+    final categories = booking['categories'] as List<dynamic>? ?? [];
+    int totalPrice = 0;
+    String serviceName = 'Service';
+
+    if (categories.isNotEmpty) {
+      final firstCategory = categories.first as Map<String, dynamic>;
+      totalPrice = firstCategory['price'] ?? 0;
+      serviceName = firstCategory['subCategoryName']?.toString() ??
+          (firstCategory['categoryId']?['name']?.toString() ?? 'Service');
+    }
 
     return {
       "id": orderId,
       "customerName": customer['name']?.toString() ?? 'Unknown Customer',
       "customerImage": customer['image']?.toString() ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80',
-      "amount": category['price'] ?? 0,
-      "items": category['categoryId']?['name']?.toString() ??
-          (category['subCategoryName']?.toString() ?? 'Service'),
+      "amount": totalPrice,
+      "items": serviceName,
       "status": _formatStatus(booking['status']?.toString() ?? 'Unknown'),
       "statusColor": _getStatusColor(booking['status']?.toString() ?? 'Unknown'),
       "bookingId": bookingId,
@@ -190,14 +207,16 @@ class _HomeScreenState extends State<HomeScreen> {
   // Format status for display
   String _formatStatus(String status) {
     switch (status.toLowerCase()) {
-      case 'requested':
-        return 'Order Assigned';
-      case 'confirmed':
+      case 'order confirmed':
         return 'Order Confirmed';
+      case 'measurement done':
+        return 'Measurement Done';
       case 'in progress':
-        return 'Stitching';
-      case 'completed':
-        return 'Completed';
+        return 'In Progress';
+      case 'ready to deliver':
+        return 'Ready to Deliver';
+      case 'delivered':
+        return 'Delivered';
       case 'cancelled':
         return 'Cancelled';
       default:
@@ -208,13 +227,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // Get status color
   String _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'requested':
+      case 'order confirmed':
         return '#FF6B6B'; // Red
-      case 'confirmed':
+      case 'measurement done':
         return '#FF9500'; // Orange
       case 'in progress':
         return '#007AFF'; // Blue
-      case 'completed':
+      case 'ready to deliver':
+        return '#9B59B6'; // Purple
+      case 'delivered':
         return '#34C759'; // Green
       case 'cancelled':
         return '#8E8E93'; // Gray
@@ -237,8 +258,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final bookingId = booking['bookingId']?.toString().toLowerCase() ?? '';
       final customer = booking['customer'] as Map<String, dynamic>? ?? {};
       final customerName = customer['name']?.toString().toLowerCase() ?? '';
-      final category = booking['category'] as Map<String, dynamic>? ?? {};
-      final categoryName = category['categoryId']?['name']?.toString().toLowerCase() ?? '';
+
+      final categories = booking['categories'] as List<dynamic>? ?? [];
+      String categoryName = '';
+      if (categories.isNotEmpty) {
+        final firstCategory = categories.first as Map<String, dynamic>;
+        categoryName = firstCategory['categoryId']?['name']?.toString().toLowerCase() ?? '';
+      }
 
       return bookingId.contains(query) ||
           customerName.contains(query) ||
@@ -355,15 +381,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Business Name
+                    // Business Name with Star Icon
                     Expanded(
-                      child: Text(
-                        businessInfo['name'] ?? 'Your Business',
-                        style: GoogleFonts.lato(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black,
-                        ),
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              businessInfo['name'] ?? 'Your Business',
+                              style: GoogleFonts.lato(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ),
+                          if (_isSponsored) ...[
+                            const SizedBox(width: 6),
+                            Image.asset(
+                              'assets/images/star.png',
+                              width: 20,
+                              height: 20,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     // Menu Button
@@ -394,92 +434,93 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Boost Business Promo
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        Colors.brown.shade600,
-                        Colors.brown.shade500,
+                // Boost Business Promo (only show if not sponsored)
+                if (!_isSponsored)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.brown.shade600,
+                          Colors.brown.shade500,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(
+                            color: Colors.orange,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.star,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                businessInfo['boostPromo']?['title'] ?? 'Boost Your Business',
+                                style: GoogleFonts.lato(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Text(
+                                businessInfo['boostPromo']?['subtitle'] ?? 'Get a featured spot',
+                                style: GoogleFonts.lato(
+                                  fontSize: 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                            Navigator.pushNamed(
+                              context,
+                              '/upgrade-profile',
+                              arguments: {
+                                'token': authProvider.token,
+                              },
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              businessInfo['boostPromo']?['buttonText'] ?? 'Upgrade Now',
+                              style: GoogleFonts.lato(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.brown.shade600,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(
-                          color: Colors.orange,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.star,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              businessInfo['boostPromo']?['title'] ?? 'Boost Your Business',
-                              style: GoogleFonts.lato(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Text(
-                              businessInfo['boostPromo']?['subtitle'] ?? 'Get a featured spot',
-                              style: GoogleFonts.lato(
-                                fontSize: 14,
-                                color: Colors.white.withOpacity(0.9),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                          Navigator.pushNamed(
-                            context,
-                            '/upgrade-profile',
-                            arguments: {
-                              'token': authProvider.token,
-                            },
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            businessInfo['boostPromo']?['buttonText'] ?? 'Upgrade Now',
-                            style: GoogleFonts.lato(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.brown.shade600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+                if (!_isSponsored) const SizedBox(height: 24),
 
                 // Search Bar
                 Container(
@@ -524,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                // Orders to Review Section (Requested status)
+                // Orders to Review Section (Order Confirmed status)
                 if (_searchQuery.isEmpty && ordersToReview['count'] > 0) ...[
                   _buildOrderSection(
                     title: 'Orders to Review',
@@ -534,7 +575,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                 ],
 
-                // Ongoing Orders Section (Confirmed & In Progress status)
+                // Ongoing Orders Section (Measurement Done, In Progress, Ready to Deliver status)
                 if (_searchQuery.isEmpty && ongoingOrders['count'] > 0) ...[
                   _buildOrderSection(
                     title: 'Ongoing Orders',
@@ -1102,92 +1143,93 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Bottom Boost Business Section
-            GestureDetector(
-              onTap: () {
-                final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                Navigator.pushNamed(
-                  context,
-                  '/upgrade-profile',
-                  arguments: {
-                    'token': authProvider.token,
-                  },
-                );
-              },
-              child: Container(
-                margin: const EdgeInsets.all(24),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      Colors.brown.shade600,
-                      Colors.brown.shade500,
-                    ],
+            // Bottom Boost Business Section (only show if not sponsored)
+            if (!_isSponsored)
+              GestureDetector(
+                onTap: () {
+                  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+                  Navigator.pushNamed(
+                    context,
+                    '/upgrade-profile',
+                    arguments: {
+                      'token': authProvider.token,
+                    },
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        Colors.brown.shade600,
+                        Colors.brown.shade500,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: const BoxDecoration(
-                        color: Colors.orange,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.star,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Boost Your Business',
-                            style: GoogleFonts.lato(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Text(
-                            'Get a featured spot',
-                            style: GoogleFonts.lato(
-                              fontSize: 12,
-                              color: Colors.white.withOpacity(0.9),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        'Upgrade',
-                        style: GoogleFonts.lato(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.brown.shade600,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: Colors.orange,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.star,
+                          color: Colors.white,
+                          size: 18,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Boost Your Business',
+                              style: GoogleFonts.lato(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            Text(
+                              'Get a featured spot',
+                              style: GoogleFonts.lato(
+                                fontSize: 12,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          'Upgrade',
+                          style: GoogleFonts.lato(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.brown.shade600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            )
+              )
           ],
         ),
       ),

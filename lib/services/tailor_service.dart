@@ -310,4 +310,55 @@ class TailorService {
       };
     }
   }
+
+  // Update booking status
+  Future<Map<String, dynamic>> updateBookingStatus({
+    required String token,
+    required String bookingId,
+    required String status,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/tailor/booking/$bookingId/status');
+
+      final response = await http.put(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        // body: json.encode({
+        //   'status': status,
+        // }),
+      );
+
+
+      debugPrint("✅ Update Booking Status Request: $bookingId -> $status");
+      debugPrint("✅ Update Booking Status Response: ${response.body}");
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return {
+          'success': true,
+          'data': data,
+          'message': data['message'] ?? 'Booking status updated successfully',
+        };
+      } else if (response.statusCode == 401) {
+        return {
+          'success': false,
+          'message': 'Unauthorized access. Please login again.',
+        };
+      } else {
+        final Map<String, dynamic> errorData = json.decode(response.body);
+        return {
+          'success': false,
+          'message': errorData['message'] ?? 'Failed to update booking status',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Network error: ${e.toString()}',
+      };
+    }
+  }
 }

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../services/tailor_service.dart';
 
 class OrderDetailsScreen extends StatefulWidget {
   const OrderDetailsScreen({super.key});
@@ -11,6 +14,7 @@ class OrderDetailsScreen extends StatefulWidget {
 
 class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   Map<String, dynamic>? bookingData;
+  bool _isUpdatingStatus = false;
 
   @override
   void didChangeDependencies() {
@@ -50,14 +54,16 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   String _formatStatus(String status) {
     switch (status.toLowerCase()) {
-      case 'requested':
-        return 'Order Assigned';
-      case 'confirmed':
+      case 'order confirmed':
         return 'Order Confirmed';
+      case 'measurement done':
+        return 'Measurement Done';
       case 'in progress':
-        return 'Stitching';
-      case 'completed':
-        return 'Completed';
+        return 'In Progress';
+      case 'ready to deliver':
+        return 'Ready to Deliver';
+      case 'delivered':
+        return 'Delivered';
       case 'cancelled':
         return 'Cancelled';
       default:
@@ -67,18 +73,93 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'requested':
-        return Colors.red;
-      case 'confirmed':
+      case 'order confirmed':
+        return const Color(0xFFFF6B6B);
+      case 'measurement done':
         return const Color(0xFFFF9500);
       case 'in progress':
         return const Color(0xFF007AFF);
-      case 'completed':
+      case 'ready to deliver':
+        return const Color(0xFF9B59B6);
+      case 'delivered':
         return const Color(0xFF34C759);
       case 'cancelled':
         return const Color(0xFF8E8E93);
       default:
         return const Color(0xFF8E8E93);
+    }
+  }
+
+  Future<void> _updateOrderStatus(String nextStatus) async {
+    setState(() {
+      _isUpdatingStatus = true;
+    });
+
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final token = authProvider.token;
+
+      if (token == null) {
+        throw Exception('Authentication token not found');
+      }
+
+      final tailorService = TailorService();
+      final bookingId = bookingData!['bookingId']?.toString() ?? '';
+
+      final response = await tailorService.updateBookingStatus(
+        token: token,
+        bookingId: bookingId,
+        status: nextStatus,
+      );
+
+      if (response['success'] == true) {
+        // Extract only the timeline from the updated booking
+        final updatedBooking = response['data']['booking'] as Map<String, dynamic>?;
+
+        if (updatedBooking != null && updatedBooking['timeline'] != null) {
+          // Update only the timeline while keeping all other booking data intact
+          setState(() {
+            bookingData!['timeline'] = updatedBooking['timeline'];
+            bookingData!['status'] = updatedBooking['status'] ?? bookingData!['status'];
+            _isUpdatingStatus = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Status updated to $nextStatus'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          // If timeline is not in response, just update loading state
+          setState(() {
+            _isUpdatingStatus = false;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Status updated successfully'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        throw Exception(response['message'] ?? 'Failed to update status');
+      }
+    } catch (e) {
+      setState(() {
+        _isUpdatingStatus = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -205,10 +286,18 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final timeline = bookingData!['timeline'] as List<dynamic>? ?? [];
     final customer = bookingData!['customer'] as Map<String, dynamic>? ?? {};
     final items = bookingData!['items'] as List<dynamic>? ?? [];
-    final category = bookingData!['category'] as Map<String, dynamic>? ?? {};
+    final categories = bookingData!['categories'] as List<dynamic>? ?? [];
     final status = bookingData!['status']?.toString() ?? 'Unknown';
     final orderId = _formatOrderId(bookingData!['bookingId']?.toString() ?? '');
     final createdAt = _formatDateTime(bookingData!['createdAt']?.toString());
+
+    // Calculate total price from categories
+    int totalPrice = 0;
+    if (categories.isNotEmpty) {
+      for (var category in categories) {
+        totalPrice += (category['price'] as int?) ?? 0;
+      }
+    }
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -252,12 +341,12 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             ],
 
             // Payment Section
-            _buildPaymentSection(category),
+            _buildPaymentSection(totalPrice),
 
             const SizedBox(height: 24),
 
             // Support Section
-            _buildSupportSection(),
+            // _buildSupportSection(),
 
             const SizedBox(height: 20),
           ],
@@ -267,11 +356,59 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
   }
 
   Widget _buildTimelineSection(List<dynamic> timeline) {
+    // Find current active step and check conditions for buttons
+    Map<String, bool> stepStatus = {};
+    for (var step in timeline) {
+      final stepName = step['step']?.toString().toLowerCase() ?? '';
+      final isActive = step['isActive'] ?? false;
+      final status = step['status']?.toString().toLowerCase() ?? '';
+      stepStatus[stepName] = isActive || status == 'completed';
+    }
+
     return Column(
       children: timeline.asMap().entries.map((entry) {
         int index = entry.key;
         Map<String, dynamic> step = entry.value;
         bool isLast = index == timeline.length - 1;
+        final stepName = step['step']?.toString() ?? '';
+        final stepNameLower = stepName.toLowerCase();
+        final isActive = step['isActive'] ?? false;
+        final status = step['status']?.toString().toLowerCase() ?? '';
+
+        // Determine if action button should be shown
+        bool showActionButton = false;
+        String buttonText = '';
+        String nextStatus = '';
+        bool isButtonEnabled = false;
+
+        // In Progress button logic only
+        if (stepNameLower == 'in progress') {
+          final measurementDoneActive = stepStatus['measurement done'] ?? false;
+          final inProgressActive = stepStatus['in progress'] ?? false;
+          final readyToDeliverActive = stepStatus['ready to deliver'] ?? false;
+
+          // Show "Start Stitching" button when Measurement Done is active and In Progress is not
+          if (measurementDoneActive && !inProgressActive && !readyToDeliverActive) {
+            showActionButton = true;
+            buttonText = 'Start Stitching';
+            nextStatus = 'In Progress';
+            isButtonEnabled = true;
+          }
+          // Show "Complete" button when In Progress is active but Ready to Deliver is not
+          else if (measurementDoneActive && inProgressActive && !readyToDeliverActive) {
+            showActionButton = true;
+            buttonText = 'Complete';
+            nextStatus = 'Ready to Deliver';
+            isButtonEnabled = true;
+          }
+          // Show disabled "Complete" button when Ready to Deliver is already active
+          else if (measurementDoneActive && inProgressActive && readyToDeliverActive) {
+            showActionButton = true;
+            buttonText = 'Complete';
+            nextStatus = 'Ready to Deliver';
+            isButtonEnabled = false;
+          }
+        }
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,30 +451,81 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    step['step']?.toString() ?? 'Unknown Step',
-                    style: GoogleFonts.lato(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              stepName,
+                              style: GoogleFonts.lato(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black,
+                              ),
+                            ),
+                            if (step['timestamp'] != null && step['date'] != null)
+                              Text(
+                                '${step['timestamp']}  ${step['date']}',
+                                style: GoogleFonts.lato(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            if (step['subtitle'] != null)
+                              Text(
+                                step['subtitle'].toString(),
+                                style: GoogleFonts.lato(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                      // Action Button
+                      if (showActionButton)
+                        GestureDetector(
+                          onTap: isButtonEnabled && !_isUpdatingStatus
+                              ? () => _updateOrderStatus(nextStatus)
+                              : null,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isButtonEnabled && !_isUpdatingStatus
+                                  ? Colors.brown.shade600
+                                  : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: _isUpdatingStatus
+                                ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : Text(
+                              buttonText,
+                              style: GoogleFonts.lato(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isButtonEnabled
+                                    ? Colors.white
+                                    : Colors.grey.shade500,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                  if (step['timestamp'] != null && step['date'] != null)
-                    Text(
-                      '${step['timestamp']}  ${step['date']}',
-                      style: GoogleFonts.lato(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  if (step['subtitle'] != null)
-                    Text(
-                      step['subtitle'].toString(),
-                      style: GoogleFonts.lato(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
                   if (!isLast) const SizedBox(height: 16),
                 ],
               ),
@@ -412,24 +600,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
-
-              // Call Button
-              GestureDetector(
-                onTap: _contactCustomer,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.phone,
-                    color: Colors.black,
-                    size: 20,
-                  ),
                 ),
               ),
             ],
@@ -666,9 +836,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
-  Widget _buildPaymentSection(Map<String, dynamic> category) {
-    final price = category['price'] ?? 0;
-
+  Widget _buildPaymentSection(int totalPrice) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -707,7 +875,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
                 ),
               ),
               Text(
-                '₹$price',
+                '₹$totalPrice',
                 style: GoogleFonts.lato(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,

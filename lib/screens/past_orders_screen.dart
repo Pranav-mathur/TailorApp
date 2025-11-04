@@ -4,9 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../providers/auth_provider.dart';
 import '../services/tailor_service.dart';
-// Import your auth provider and booking service
-// import 'package:your_app/providers/auth_provider.dart';
-// import 'package:your_app/services/booking_service.dart'; // Or wherever getBookings is located
 
 class PastOrdersScreen extends StatefulWidget {
   const PastOrdersScreen({super.key});
@@ -52,10 +49,10 @@ class _PastOrdersScreenState extends State<PastOrdersScreen> {
       }
       final tailorService = TailorService();
 
-      // Call the API - filtering for completed and cancelled orders
+      // Call the API - filtering for delivered and cancelled orders
       final response = await tailorService.getBookings(
         token: token,
-        status: null, // We'll filter locally to show both Completed and Cancelled
+        status: null, // We'll filter locally to show both Delivered and Cancelled
         page: _currentPage,
         limit: _limit,
       );
@@ -64,15 +61,15 @@ class _PastOrdersScreenState extends State<PastOrdersScreen> {
         final data = response['data'];
         final bookings = data['data'] as List<dynamic>;
 
-        // Filter for only Completed or Cancelled orders
+        // Filter for only Delivered or Cancelled orders
         final pastOrders = bookings.where((booking) {
           final status = booking['status']?.toString().toLowerCase() ?? '';
-          return status == 'completed' || status == 'cancelled';
+          return status == 'delivered' || status == 'cancelled';
         }).toList();
 
         setState(() {
           _orders = pastOrders;
-          _metaData = data['metaData'];
+          _metaData = data['pagination'];
           _isLoading = false;
         });
       } else {
@@ -102,14 +99,39 @@ class _PastOrdersScreenState extends State<PastOrdersScreen> {
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'completed':
-        return const Color(0xFF10B981); // Green
+      case 'order confirmed':
+        return const Color(0xFFFF6B6B); // Red
+      case 'measurement done':
+        return const Color(0xFFFF9500); // Orange
+      case 'in progress':
+        return const Color(0xFF007AFF); // Blue
+      case 'ready to deliver':
+        return const Color(0xFF9B59B6); // Purple
+      case 'delivered':
+        return const Color(0xFF34C759); // Green
       case 'cancelled':
-        return const Color(0xFFEF4444); // Red
-      case 'payment pending':
-        return const Color(0xFFFF6B6B); // Light red
+        return const Color(0xFF8E8E93); // Gray
       default:
         return const Color(0xFF6B7280); // Gray
+    }
+  }
+
+  String _formatStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'order confirmed':
+        return 'Order Confirmed';
+      case 'measurement done':
+        return 'Measurement Done';
+      case 'in progress':
+        return 'In Progress';
+      case 'ready to deliver':
+        return 'Ready to Deliver';
+      case 'delivered':
+        return 'Delivered';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
     }
   }
 
@@ -213,7 +235,7 @@ class _PastOrdersScreenState extends State<PastOrdersScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Your completed and cancelled orders will appear here',
+              'Your delivered and cancelled orders will appear here',
               style: GoogleFonts.lato(
                 fontSize: 14,
                 color: Colors.grey[600],
@@ -291,11 +313,28 @@ class _PastOrdersScreenState extends State<PastOrdersScreen> {
   Widget _buildPastOrderItem(Map<String, dynamic> order) {
     final status = order['status'] ?? 'Unknown';
     final statusColor = _getStatusColor(status);
-    final customerName = order['customer_name'] ?? 'Unknown Customer';
-    final orderId = order['order_id'] ?? order['bookingId'] ?? 'N/A';
-    final amount = order['price'] ?? 0;
-    final customerImage = order['customer_image'] ?? '';
-    final categoryName = order['category']?['name'] ?? 'Service';
+    final formattedStatus = _formatStatus(status);
+
+    // Extract customer data from new structure
+    final customer = order['customer'] as Map<String, dynamic>? ?? {};
+    final customerName = customer['name'] ?? 'Unknown Customer';
+    final customerImage = customer['image'] ?? '';
+
+    // Extract order ID
+    final bookingId = order['bookingId'] ?? 'N/A';
+    final orderId = bookingId.length >= 5 ? bookingId.substring(0, 5) : bookingId;
+
+    // Extract price and category from categories array
+    final categories = order['categories'] as List<dynamic>? ?? [];
+    int totalPrice = 0;
+    String categoryName = 'Service';
+
+    if (categories.isNotEmpty) {
+      final firstCategory = categories.first as Map<String, dynamic>;
+      totalPrice = firstCategory['price'] ?? 0;
+      categoryName = firstCategory['subCategoryName']?.toString() ??
+          (firstCategory['categoryId']?['name']?.toString() ?? 'Service');
+    }
 
     return GestureDetector(
       onTap: () => _navigateToOrderDetails(order),
@@ -417,7 +456,7 @@ class _PastOrdersScreenState extends State<PastOrdersScreen> {
                         child: Row(
                           children: [
                             Text(
-                              '₹$amount',
+                              '₹$totalPrice',
                               style: GoogleFonts.lato(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -450,7 +489,7 @@ class _PastOrdersScreenState extends State<PastOrdersScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            status,
+                            formattedStatus,
                             style: GoogleFonts.lato(
                               fontSize: 11,
                               fontWeight: FontWeight.w500,
