@@ -179,16 +179,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final customer = booking['customer'] as Map<String, dynamic>? ?? {};
 
-    // Handle categories list to get price and service name
+    // Handle categories list to calculate total price from all items
     final categories = booking['categories'] as List<dynamic>? ?? [];
     int totalPrice = 0;
-    String serviceName = 'Service';
 
-    if (categories.isNotEmpty) {
-      final firstCategory = categories.first as Map<String, dynamic>;
-      totalPrice = firstCategory['price'] ?? 0;
-      serviceName = firstCategory['subCategoryName']?.toString() ??
-          (firstCategory['categoryId']?['name']?.toString() ?? 'Service');
+    // Sum up all prices from all categories
+    for (var category in categories) {
+      final categoryMap = category as Map<String, dynamic>;
+      totalPrice += (categoryMap['price'] as int?) ?? 0;
     }
 
     return {
@@ -196,7 +194,6 @@ class _HomeScreenState extends State<HomeScreen> {
       "customerName": customer['name']?.toString() ?? 'Unknown Customer',
       "customerImage": customer['image']?.toString() ?? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80',
       "amount": totalPrice,
-      "items": serviceName,
       "status": _formatStatus(booking['status']?.toString() ?? 'Unknown'),
       "statusColor": _getStatusColor(booking['status']?.toString() ?? 'Unknown'),
       "bookingId": bookingId,
@@ -983,29 +980,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        flex: 2,
-                        child: Row(
-                          children: [
-                            Text(
-                              '₹${order['amount']}',
-                              style: GoogleFonts.lato(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black,
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                ' • ${order['items']}',
-                                style: GoogleFonts.lato(
-                                  fontSize: 14,
-                                  color: Colors.grey[600],
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        '₹${order['amount']}',
+                        style: GoogleFonts.lato(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
                         ),
                       ),
                       const SizedBox(width: 8),
