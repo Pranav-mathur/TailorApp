@@ -265,6 +265,186 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
         provider.getValue('kyc_address_proof_back') != null;
   }
 
+  // Show bottom sheet for supported documents
+  void _showSupportedDocumentsBottomSheet(BuildContext context, String documentType) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            // Drag handle
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Header with icon
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.credit_card,
+                          color: Colors.blue.shade400,
+                          size: 24,
+                        ),
+                        Positioned(
+                          right: 6,
+                          bottom: 6,
+                          child: Container(
+                            width: 16,
+                            height: 16,
+                            decoration: const BoxDecoration(
+                              color: Colors.green,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check,
+                              color: Colors.white,
+                              size: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'Supported Documents',
+                    style: GoogleFonts.lato(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            // ID Proof Section
+            if (documentType == 'id_proof') ...[
+              _buildDocumentTypeSection(
+                'ID Proof',
+                'Aadhaar Card, Passport, PAN Card, Voter ID, Driving Licence, Ration Card, Bank passbook',
+              ),
+              const SizedBox(height: 16),
+            ],
+            // Address Proof Section
+            if (documentType == 'address_proof') ...[
+              _buildDocumentTypeSection(
+                'Address Proof',
+                'Aadhaar Card, Passport, PAN Card, Voter ID, Driving Licence, Ration Card, Bank passbook',
+              ),
+              const SizedBox(height: 16),
+            ],
+            // Show both sections if documentType is 'all'
+            if (documentType == 'all') ...[
+              _buildDocumentTypeSection(
+                'ID Proof',
+                'Aadhaar Card, Passport, PAN Card, Voter ID, Driving Licence, Ration Card, Bank passbook',
+              ),
+              const SizedBox(height: 16),
+              _buildDocumentTypeSection(
+                'Address Proof',
+                'Aadhaar Card, Passport, PAN Card, Voter ID, Driving Licence, Ration Card, Bank passbook',
+              ),
+              const SizedBox(height: 16),
+            ],
+            // Okay Button
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE57373),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'Okay',
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Build document type section for bottom sheet
+  Widget _buildDocumentTypeSection(String title, String documents) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F5F5),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              documents,
+              style: GoogleFonts.lato(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: Colors.black54,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDocumentUploadItem(String documentName, String documentType) {
     final kycProvider = Provider.of<KycProvider>(context);
     final globalProvider = Provider.of<GlobalProvider>(context);
@@ -482,10 +662,11 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
     }
   }
 
-  // Document Section (unchanged)
+  // Document Section with clickable badge
   Widget _buildDocumentSection({
     required String title,
     required List<Map<String, String>> documents,
+    required String documentType, // 'id_proof' or 'address_proof'
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -516,28 +697,30 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                     color: Colors.black,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.brown.shade100,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Documents',
-                        style: GoogleFonts.lato(
-                          fontSize: 11,
-                          color: Colors.brown.shade700,
-                          fontWeight: FontWeight.w500,
+                GestureDetector(
+                  onTap: () => _showSupportedDocumentsBottomSheet(context, documentType),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.brown.shade100,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Documents',
+                          style: GoogleFonts.lato(
+                            fontSize: 11,
+                            color: Colors.brown.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -646,6 +829,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                   children: [
                     _buildDocumentSection(
                       title: 'Upload ID Proof',
+                      documentType: 'id_proof',
                       documents: [
                         {'name': 'ID Proof Front', 'type': 'id_front'},
                         {'name': 'ID Proof Back', 'type': 'id_back'},
@@ -654,6 +838,7 @@ class _KycVerificationScreenState extends State<KycVerificationScreen> {
                     const SizedBox(height: 8),
                     _buildDocumentSection(
                       title: 'Upload Address Proof',
+                      documentType: 'address_proof',
                       documents: [
                         {'name': 'Address Proof Front', 'type': 'address_front'},
                         {'name': 'Address Proof Back', 'type': 'address_back'},

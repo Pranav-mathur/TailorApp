@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:tailor_app/screens/upgrade_profile_screen.dart';
-
 
 import 'providers/global_provider.dart';
 import 'providers/kyc_provider.dart';
@@ -21,7 +21,20 @@ import 'screens/past_orders_screen.dart';
 import 'screens/my_profile_screen.dart';
 import 'screens/bank_details_screen.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter is initialized before running the app
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Set system UI overlay style (status bar and navigation bar)
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
   runApp(
     MultiProvider(
       providers: [
@@ -46,8 +59,10 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
         textTheme: GoogleFonts.latoTextTheme(),
+        // Add scaffold background color to match splash
+        scaffoldBackgroundColor: Colors.white,
       ),
-      initialRoute: '/splash', // Start with splash screen
+      initialRoute: '/splash',
       routes: {
         '/splash': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
@@ -62,7 +77,7 @@ class MyApp extends StatelessWidget {
         '/past-orders': (context) => const PastOrdersScreen(),
         '/my-profile': (context) => const MyProfileScreen(),
         '/bank-details': (context) => const BankDetailsScreen(),
-        '/upgrade-profile': (context) => const UpgradeProfileScreen(tailorId: '', token: '',),
+        '/upgrade-profile': (context) => const UpgradeProfileScreen(tailorId: '', token: ''),
       },
     );
   }
