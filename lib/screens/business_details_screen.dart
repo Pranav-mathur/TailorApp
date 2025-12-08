@@ -297,29 +297,21 @@ class _BusinessDetailsScreenState extends State<BusinessDetailsScreen> {
     );
   }
 
+  void _refreshAddress() {
+    final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
+    final address = globalProvider.getAddress();
+
+    if (address != null) {
+      setState(() {
+        _selectedAddress = address;
+      });
+    }
+  }
+
   Future<void> _addAddress() async {
     try {
-      final result = await Navigator.pushNamed(context, '/add-address');
-
-      if (result == true) {
-        final globalProvider = Provider.of<GlobalProvider>(context, listen: false);
-        final address = globalProvider.getAddress();
-
-        if (address != null) {
-          setState(() {
-            _selectedAddress = address;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Address saved successfully!'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      }
+      await Navigator.pushNamed(context, '/set-location');
+      _refreshAddress();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

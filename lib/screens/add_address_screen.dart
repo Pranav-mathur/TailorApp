@@ -111,7 +111,12 @@ class _AddAddressScreenState extends State<AddAddressScreen> {
 
     // Navigate back with result
     await Future.delayed(const Duration(milliseconds: 500));
-    Navigator.of(context).pop(true);
+    // Navigator.of(context).pop(true);
+    // Navigator.of(context).pop(true);
+    Navigator.of(context).popUntil((route) {
+      // Check if the route is the business details screen
+      return route.settings.name == '/business' || route.isFirst;
+    });
   }
 
   void _showSnackBar(String message, Color color) {
