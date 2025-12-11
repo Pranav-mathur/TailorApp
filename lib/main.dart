@@ -8,7 +8,7 @@ import 'package:tailor_app/screens/upgrade_profile_screen.dart';
 import 'providers/global_provider.dart';
 import 'providers/kyc_provider.dart';
 import 'providers/auth_provider.dart';
-import 'providers/location_provider.dart';  // ✅ ADD THIS - New provider
+import 'providers/location_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/otp_verification_screen.dart';
@@ -22,7 +22,7 @@ import 'screens/order_details_screen.dart';
 import 'screens/past_orders_screen.dart';
 import 'screens/my_profile_screen.dart';
 import 'screens/bank_details_screen.dart';
-import 'screens/set_location_screen.dart';  // ✅ ADD THIS - New OpenStreetMap screen
+import 'screens/set_location_screen.dart';
 
 void main() async {
   // Ensure Flutter is initialized before running the app

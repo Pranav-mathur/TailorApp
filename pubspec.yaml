@@ -50,7 +50,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_native_splash: ^2.3.10
+#  flutter_native_splash: ^2.3.10
   flutter_lints: ^5.0.0
 
 flutter:
@@ -58,14 +58,3 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
-
-flutter_native_splash:
-  color: "#FFFFFF"
-  image: assets/images/AppIcon.png
-  android: true
-  ios: true
-  web: false
-
-  android_12:
-    image: assets/images/AppIcon.png
-    color: "#FFFFFF"
