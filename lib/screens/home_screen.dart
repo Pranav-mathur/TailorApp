@@ -1110,6 +1110,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: 'Contact Us',
                       onTap: () {
                         Navigator.pop(context);
+                        Navigator.pushNamed(context, '/contact-us');
                         // Add contact us navigation or functionality
                       },
                     ),
